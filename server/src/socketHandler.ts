@@ -157,7 +157,7 @@ export function registerSocketHandlers(io: Server) {
     // ── CREATE ROOM ──────────────────────────────────────────────────────────
     socket.on(
       'create_room',
-      async (data: { hostName: string; sessionId?: string }, callback) => {
+      async (data: { hostName: string; sessionId?: string }, callback?: any) => {
         try {
           const sessionId = data.sessionId || uuidv4();
           const room = await createRoom(sessionId, socket.id, data.hostName || 'Host');
@@ -180,7 +180,7 @@ export function registerSocketHandlers(io: Server) {
       'join_room',
       async (
         data: { roomCode: string; playerName: string; sessionId?: string },
-        callback
+        callback?: any
       ) => {
         try {
           const room = await getRoom(data.roomCode);
@@ -298,7 +298,7 @@ export function registerSocketHandlers(io: Server) {
     // ── RANDOMIZE ROLES ──────────────────────────────────────────────────────
     socket.on(
       'randomize_roles',
-      async (data: { roomCode: string; imposterCount?: number }, callback) => {
+      async (data: { roomCode: string; imposterCount?: number }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -357,7 +357,7 @@ export function registerSocketHandlers(io: Server) {
       'assign_role',
       async (
         data: { roomCode: string; playerId: string; role: PlayerRole },
-        callback
+        callback?: any
       ) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
@@ -378,7 +378,7 @@ export function registerSocketHandlers(io: Server) {
     // ── LOAD SONG ────────────────────────────────────────────────────────────
     socket.on(
       'load_song',
-      async (data: { roomCode: string; role: PlayerRole; url: string }, callback) => {
+      async (data: { roomCode: string; role: PlayerRole; url: string }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -408,7 +408,7 @@ export function registerSocketHandlers(io: Server) {
       'play_song',
       async (
         data: { roomCode: string; role: PlayerRole; startPosition?: number },
-        callback
+        callback?: any
       ) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
@@ -440,7 +440,7 @@ export function registerSocketHandlers(io: Server) {
     // ── START ROUND (synchronized, plays both songs) ─────────────────────────
     socket.on(
       'start_round',
-      async (data: { roomCode: string }, callback) => {
+      async (data: { roomCode: string }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -502,7 +502,7 @@ export function registerSocketHandlers(io: Server) {
       'pause_song',
       async (
         data: { roomCode: string; role: PlayerRole; currentPosition?: number },
-        callback
+        callback?: any
       ) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
@@ -526,7 +526,7 @@ export function registerSocketHandlers(io: Server) {
     // ── STOP SONG ────────────────────────────────────────────────────────────
     socket.on(
       'stop_song',
-      async (data: { roomCode: string; role: PlayerRole }, callback) => {
+      async (data: { roomCode: string; role: PlayerRole }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -548,7 +548,7 @@ export function registerSocketHandlers(io: Server) {
       'seek_song',
       async (
         data: { roomCode: string; role: PlayerRole; position: number },
-        callback
+        callback?: any
       ) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
@@ -574,7 +574,7 @@ export function registerSocketHandlers(io: Server) {
     );
 
     // ── END ROUND ────────────────────────────────────────────────────────────
-    socket.on('end_round', async (data: { roomCode: string }, callback) => {
+    socket.on('end_round', async (data: { roomCode: string }, callback?: any) => {
       const conn = connectionMap.get(socket.id);
       if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
       const room = await getRoom(data.roomCode);
@@ -602,7 +602,7 @@ export function registerSocketHandlers(io: Server) {
     });
 
     // ── NEXT ROUND ───────────────────────────────────────────────────────────
-    socket.on('next_round', async (data: { roomCode: string }, callback) => {
+    socket.on('next_round', async (data: { roomCode: string }, callback?: any) => {
       const conn = connectionMap.get(socket.id);
       if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
       const room = await getRoom(data.roomCode);
@@ -625,7 +625,7 @@ export function registerSocketHandlers(io: Server) {
     // ── RANDOMIZE NEXT IMPOSTER (for next round) ─────────────────────────────
     socket.on(
       'randomize_next_imposter',
-      async (data: { roomCode: string }, callback) => {
+      async (data: { roomCode: string }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -667,7 +667,7 @@ export function registerSocketHandlers(io: Server) {
     // ── KICK PLAYER ──────────────────────────────────────────────────────────
     socket.on(
       'kick_player',
-      async (data: { roomCode: string; playerId: string }, callback) => {
+      async (data: { roomCode: string; playerId: string }, callback?: any) => {
         const conn = connectionMap.get(socket.id);
         if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
         const room = await getRoom(data.roomCode);
@@ -723,7 +723,7 @@ export function registerSocketHandlers(io: Server) {
     // ── HOST RECONNECT ───────────────────────────────────────────────────────
     socket.on(
       'host_reconnect',
-      async (data: { roomCode: string; sessionId: string }, callback) => {
+      async (data: { roomCode: string; sessionId: string }, callback?: any) => {
         const room = await getRoom(data.roomCode);
         if (!room) return callback?.({ success: false, error: 'ROOM_NOT_FOUND' });
         if (room.hostId !== data.sessionId)
@@ -748,7 +748,7 @@ export function registerSocketHandlers(io: Server) {
     );
 
     // ── GET ROOM STATE (for host dashboard refresh) ──────────────────────────
-    socket.on('get_room_state', async (data: { roomCode: string }, callback) => {
+    socket.on('get_room_state', async (data: { roomCode: string }, callback?: any) => {
       const conn = connectionMap.get(socket.id);
       if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
       const room = await getRoom(data.roomCode);
