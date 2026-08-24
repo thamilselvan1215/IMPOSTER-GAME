@@ -1,11 +1,12 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { connectSocket } from '@/lib/socket';
 import { getOrCreateSessionId, saveRoomSession } from '@/lib/session';
 import Link from 'next/link';
 
 function JoinForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -27,6 +28,8 @@ function JoinForm() {
   }, []);
 
   const handleJoin = () => {
+    if (loading) return;
+
     const code = roomCode.trim().toUpperCase();
     const name = playerName.trim();
 
@@ -70,8 +73,7 @@ function JoinForm() {
 
           if (res.success) {
             saveRoomSession(code, name, false);
-            // Use direct window location assignment for rock-solid mobile navigation
-            window.location.href = `/player?room=${code}&name=${encodeURIComponent(name)}`;
+            router.push(`/player?room=${code}&name=${encodeURIComponent(name)}`);
           } else {
             const msgs: Record<string, string> = {
               ROOM_NOT_FOUND: 'Room not found. Check the room code and try again.',
@@ -134,14 +136,8 @@ function JoinForm() {
           </p>
         </div>
 
-        {/* Form */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleJoin();
-          }}
-          style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
-        >
+        {/* Form Container (using div to prevent native mobile HTML form refreshes) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Room Code */}
           <div>
             <label className="section-label" style={{ display: 'block', marginBottom: '8px' }}>
@@ -156,6 +152,9 @@ function JoinForm() {
                 const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
                 setRoomCode(val);
                 setError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleJoin();
               }}
               style={{ textAlign: 'center', fontSize: '1.5rem', fontWeight: 700, letterSpacing: '0.2em' }}
               autoCapitalize="characters"
@@ -177,6 +176,9 @@ function JoinForm() {
               onChange={(e) => {
                 setPlayerName(e.target.value.slice(0, 20));
                 setError('');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleJoin();
               }}
               autoComplete="off"
               maxLength={20}
@@ -200,10 +202,11 @@ function JoinForm() {
             </div>
           )}
 
-          {/* Join Button — Always enabled when not loading so tapping gives active feedback */}
+          {/* Join Button */}
           <button
-            type="submit"
+            type="button"
             className="btn btn-primary btn-lg btn-full"
+            onClick={handleJoin}
             disabled={loading}
             style={{ marginTop: '8px' }}
           >
@@ -226,7 +229,7 @@ function JoinForm() {
               <>🚀 Join Game</>
             )}
           </button>
-        </form>
+        </div>
 
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '32px', textAlign: 'center', lineHeight: 1.6 }}>
           The Game Master will see you join in real time.<br />
