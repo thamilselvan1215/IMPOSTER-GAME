@@ -37,10 +37,24 @@ export default function HostDashboard() {
     setTimeout(() => setToast(null), 3000);
   }, []);
 
-  // Build join URL from current window location
+  // Build join URL for phones (replaces localhost with LAN IP if available)
   useEffect(() => {
-    const base = window.location.origin;
-    setJoinUrl(`${base}/join`);
+    let hostname = window.location.hostname;
+    const port = window.location.port ? `:${window.location.port}` : '';
+    const protocol = window.location.protocol;
+
+    if ((hostname === 'localhost' || hostname === '127.0.0.1') && process.env.NEXT_PUBLIC_SERVER_URL) {
+      try {
+        const serverUrl = new URL(process.env.NEXT_PUBLIC_SERVER_URL);
+        if (serverUrl.hostname && serverUrl.hostname !== 'localhost' && serverUrl.hostname !== '127.0.0.1') {
+          hostname = serverUrl.hostname;
+        }
+      } catch {
+        // Fallback to window.location.hostname
+      }
+    }
+
+    setJoinUrl(`${protocol}//${hostname}${port}/join`);
   }, []);
 
   // Try to reconnect if we have a saved session
