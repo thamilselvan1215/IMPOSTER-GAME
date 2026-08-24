@@ -1,16 +1,25 @@
 'use client';
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { connectSocket } from '@/lib/socket';
 import { getOrCreateSessionId, saveRoomSession } from '@/lib/session';
 import Link from 'next/link';
 
-export default function JoinPage() {
-  const router = useRouter();
+function JoinForm() {
+  const searchParams = useSearchParams();
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Auto-fill room code from URL params if present (e.g. from QR code scan ?code=XXXXXX or ?room=XXXXXX)
+  useEffect(() => {
+    const codeParam = searchParams.get('code') || searchParams.get('room');
+    if (codeParam) {
+      const clean = codeParam.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
+      setRoomCode(clean);
+    }
+  }, [searchParams]);
 
   // Eagerly initiate socket connection when page mounts
   useEffect(() => {
@@ -20,9 +29,23 @@ export default function JoinPage() {
   const handleJoin = () => {
     const code = roomCode.trim().toUpperCase();
     const name = playerName.trim();
-    if (code.length !== 6) return setError('Room code must be 6 characters.');
-    if (!name) return setError('Please enter your name.');
-    if (name.length > 20) return setError('Name must be 20 characters or less.');
+
+    if (!code) {
+      setError('Please enter the 6-character room code.');
+      return;
+    }
+    if (code.length !== 6) {
+      setError(`Room code must be 6 characters (you entered ${code.length}).`);
+      return;
+    }
+    if (!name) {
+      setError('Please enter your name.');
+      return;
+    }
+    if (name.length > 20) {
+      setError('Name must be 20 characters or less.');
+      return;
+    }
 
     setError('');
     setLoading(true);
@@ -33,10 +56,9 @@ export default function JoinPage() {
     let timeoutId: NodeJS.Timeout | null = null;
 
     const doJoin = () => {
-      // 5-second timeout safeguard in case socket response is delayed
       timeoutId = setTimeout(() => {
         setLoading(false);
-        setError('Connection timed out. Check your Wi-Fi and try again.');
+        setError('Connection timed out. Check your Wi-Fi network and try again.');
       }, 6000);
 
       socket.emit(
@@ -48,12 +70,13 @@ export default function JoinPage() {
 
           if (res.success) {
             saveRoomSession(code, name, false);
-            router.push(`/player?room=${code}&name=${encodeURIComponent(name)}`);
+            // Use direct window location assignment for rock-solid mobile navigation
+            window.location.href = `/player?room=${code}&name=${encodeURIComponent(name)}`;
           } else {
             const msgs: Record<string, string> = {
-              ROOM_NOT_FOUND: 'Room not found. Check the code and try again.',
+              ROOM_NOT_FOUND: 'Room not found. Check the room code and try again.',
               ROOM_FULL: 'This room is full (15 players max).',
-              DUPLICATE_NAME: 'That name is already taken. Choose another.',
+              DUPLICATE_NAME: 'That name is already taken in this room. Choose another.',
               GAME_IN_PROGRESS: 'The game has already started.',
               GAME_OVER: 'This game has ended.',
             };
@@ -73,7 +96,6 @@ export default function JoinPage() {
       };
       socket.on('connect', onConnect);
 
-      // Fallback timeout if socket cannot connect at all
       setTimeout(() => {
         if (!socket.connected) {
           socket.off('connect', onConnect);
@@ -161,7 +183,7 @@ export default function JoinPage() {
             />
           </div>
 
-          {/* Error */}
+          {/* Error message box */}
           {error && (
             <div
               style={{
@@ -171,17 +193,18 @@ export default function JoinPage() {
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--imposter-light)',
                 fontSize: '0.9rem',
+                textAlign: 'center',
               }}
             >
-              {error}
+              ⚠️ {error}
             </div>
           )}
 
-          {/* Join Button */}
+          {/* Join Button — Always enabled when not loading so tapping gives active feedback */}
           <button
             type="submit"
             className="btn btn-primary btn-lg btn-full"
-            disabled={loading || roomCode.length !== 6 || !playerName.trim()}
+            disabled={loading}
             style={{ marginTop: '8px' }}
           >
             {loading ? (
@@ -211,5 +234,13 @@ export default function JoinPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<div style={{ textAlign: 'center', paddingTop: '40px', color: 'var(--text-muted)' }}>Loading...</div>}>
+      <JoinForm />
+    </Suspense>
   );
 }
