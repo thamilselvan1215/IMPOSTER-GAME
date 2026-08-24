@@ -1,27 +1,25 @@
 // ─────────────────────────────────────────────
 //  Socket.IO client singleton
-//
-//  Connection strategy:
-//  - NEXT_PUBLIC_SERVER_URL in .env.local sets
-//    the Socket.IO server address explicitly.
-//  - Set this to http://YOUR_LAN_IP:3001
-//  - Phones connect directly to port 3001.
-//  - Make sure to run open-firewall.bat first!
 // ─────────────────────────────────────────────
 
 import { io, Socket } from 'socket.io-client';
 
 function getServerUrl(): string {
-  // Use the explicit server URL from environment (set in .env.local)
-  const envUrl = process.env.NEXT_PUBLIC_SERVER_URL;
-  if (envUrl) return envUrl;
-  // Fallback to same host on port 3001
   if (typeof window !== 'undefined') {
-    const url = new URL(window.location.href);
-    url.port = '3001';
-    return url.origin;
+    // If on a device connecting via LAN IP (e.g. 192.168.x.x), dynamically use that IP on port 3001
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+
+    if (host !== 'localhost' && host !== '127.0.0.1') {
+      return `${protocol}//${host}:3001`;
+    }
+
+    const envUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+    if (envUrl) return envUrl;
+
+    return `${protocol}//${host}:3001`;
   }
-  return 'http://localhost:3001';
+  return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
 }
 
 let socket: Socket | null = null;
@@ -35,7 +33,7 @@ export function getSocket(): Socket {
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      timeout: 20000,
+      timeout: 10000,
       transports: ['polling', 'websocket'],
     });
   }
