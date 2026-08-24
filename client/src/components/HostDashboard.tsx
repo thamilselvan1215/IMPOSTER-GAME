@@ -34,7 +34,7 @@ export default function HostDashboard() {
 
   const showToast = useCallback((msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ msg, type });
-    setTimeout(() => setToast(null), 3000);
+    setTimeout(() => setToast(null), 3500);
   }, []);
 
   // Build join URL for phones (replaces localhost with LAN IP if available)
@@ -57,23 +57,6 @@ export default function HostDashboard() {
     setJoinUrl(`${protocol}//${hostname}${port}/join`);
   }, []);
 
-  // Try to reconnect if we have a saved session
-  useEffect(() => {
-    const saved = localStorage.getItem('fti_room_code');
-    const isHost = localStorage.getItem('fti_is_host');
-    if (saved && isHost === '1') {
-      const socket = socketRef.current;
-      if (!socket.connected) socket.connect();
-      socket.emit('host_reconnect', { roomCode: saved, sessionId: sessionId.current }, (res: { success: boolean }) => {
-        if (res?.success) {
-          setRoomCode(saved);
-          setNameEntered(true);
-          setCreating(false);
-        }
-      });
-    }
-  }, []);
-
   // Socket event listeners
   useEffect(() => {
     const socket = socketRef.current;
@@ -88,10 +71,13 @@ export default function HostDashboard() {
     const onRolesAssigned = (data: { assignments: RoleAssignmentEntry[] }) => {
       setRoomState((prev) => {
         if (!prev) return prev;
-        const updated = { ...prev, players: prev.players.map((p) => {
-          const a = data.assignments.find((x) => x.playerId === p.id);
-          return a ? { ...p, role: a.role } : p;
-        })};
+        const updated = {
+          ...prev,
+          players: prev.players.map((p) => {
+            const a = data.assignments.find((x) => x.playerId === p.id);
+            return a ? { ...p, role: a.role } : p;
+          }),
+        };
         return updated;
       });
       showToast('Roles assigned! Players can see their roles.', 'success');
@@ -112,9 +98,15 @@ export default function HostDashboard() {
     socket.on('player_ready_update', onPlayerReadyUpdate);
     socket.on('imposter_revealed', onImposterRevealed);
     socket.on('game_state_update', (d: { state: GameState }) => {
-      setRoomState((p) => p ? { ...p, state: d.state } : p);
-      if (d.state === 'PLAYING') { setCrewPlaying(true); setImposterPlaying(true); }
-      if (d.state === 'PAUSED' || d.state === 'ROUND_COMPLETE') { setCrewPlaying(false); setImposterPlaying(false); }
+      setRoomState((p) => (p ? { ...p, state: d.state } : p));
+      if (d.state === 'PLAYING') {
+        setCrewPlaying(true);
+        setImposterPlaying(true);
+      }
+      if (d.state === 'PAUSED' || d.state === 'ROUND_COMPLETE') {
+        setCrewPlaying(false);
+        setImposterPlaying(false);
+      }
     });
     // Track position from server sync pings
     socket.on('sync_check', (d: { role: string; expectedPosition: number }) => {
@@ -141,19 +133,70 @@ export default function HostDashboard() {
     };
   }, [showToast]);
 
+  // Try to reconnect if we have a saved session
+  useEffect(() => {
+    const saved = localStorage.getItem('fti_room_code');
+    const isHost = localStorage.getItem('fti_is_host');
+    if (saved && isHost === '1') {
+      const socket = socketRef.current;
+      if (!socket.connected) socket.connect();
+      socket.emit(
+        'host_reconnect',
+        { roomCode: saved, sessionId: sessionId.current },
+        (res: { success: boolean }) => {
+          if (res?.success) {
+            setRoomCode(saved);
+            setNameEntered(true);
+            setCreating(false);
+          }
+        }
+      );
+    }
+  }, []);
+
   const createRoom = () => {
-    if (!hostName.trim()) return;
+    const name = hostName.trim();
+    if (!name) return;
     setCreating(true);
-    socketRef.current.emit('create_room', { hostName: hostName.trim(), sessionId: sessionId.current }, (res: { success: boolean; roomCode?: string; error?: string }) => {
-      setCreating(false);
-      if (res.success && res.roomCode) {
-        setRoomCode(res.roomCode);
-        saveRoomSession(res.roomCode, hostName.trim(), true);
-        showToast('Room created!', 'success');
-      } else {
-        showToast(res.error || 'Failed to create room', 'error');
-      }
-    });
+
+    const socket = connectSocket();
+
+    const doCreate = () => {
+      socket.emit(
+        'create_room',
+        { hostName: name, sessionId: sessionId.current },
+        (res: { success: boolean; roomCode?: string; error?: string }) => {
+          setCreating(false);
+          if (res.success && res.roomCode) {
+            setRoomCode(res.roomCode);
+            setNameEntered(true);
+            saveRoomSession(res.roomCode, name, true);
+            showToast('Room created!', 'success');
+          } else {
+            showToast(res.error || 'Failed to create room', 'error');
+          }
+        }
+      );
+    };
+
+    if (socket.connected) {
+      doCreate();
+    } else {
+      socket.connect();
+      const onConn = () => {
+        socket.off('connect', onConn);
+        doCreate();
+      };
+      socket.on('connect', onConn);
+
+      setTimeout(() => {
+        if (!socket.connected) {
+          socket.off('connect', onConn);
+          setCreating(false);
+          showToast('Server unreachable. Ensure server is running on port 3001.', 'error');
+        }
+      }, 5000);
+    }
   };
 
   const randomizeRoles = () => {
@@ -170,32 +213,46 @@ export default function HostDashboard() {
 
   const handleLoadSong = (role: 'CREW' | 'IMPOSTER', url: string) => {
     if (!roomCode) return;
-    socketRef.current.emit('load_song', { roomCode, role, url }, (res: { success: boolean; videoId?: string; error?: string }) => {
-      if (res.success) showToast(`${role} song loaded!`, 'success');
-      else showToast(res.error === 'INVALID_URL' ? 'Invalid YouTube URL' : 'Failed to load song', 'error');
-    });
+    socketRef.current.emit(
+      'load_song',
+      { roomCode, role, url },
+      (res: { success: boolean; videoId?: string; error?: string }) => {
+        if (res.success) showToast(`${role} song loaded!`, 'success');
+        else showToast(res.error === 'INVALID_URL' ? 'Invalid YouTube URL' : 'Failed to load song', 'error');
+      }
+    );
   };
 
   const handlePlay = (role: 'CREW' | 'IMPOSTER') => {
     if (!roomCode) return;
     socketRef.current.emit('play_song', { roomCode, role }, (res: { success: boolean; error?: string }) => {
-      if (res.success) { if (role === 'CREW') setCrewPlaying(true); else setImposterPlaying(true); }
-      else showToast(res.error === 'SONG_NOT_LOADED' ? 'Load a song first!' : 'Failed to play', 'error');
+      if (res.success) {
+        if (role === 'CREW') setCrewPlaying(true);
+        else setImposterPlaying(true);
+      } else showToast(res.error === 'SONG_NOT_LOADED' ? 'Load a song first!' : 'Failed to play', 'error');
     });
   };
 
   const handlePause = (role: 'CREW' | 'IMPOSTER') => {
     if (!roomCode) return;
     socketRef.current.emit('pause_song', { roomCode, role }, (res: { success: boolean }) => {
-      if (res.success) { if (role === 'CREW') setCrewPlaying(false); else setImposterPlaying(false); }
+      if (res.success) {
+        if (role === 'CREW') setCrewPlaying(false);
+        else setImposterPlaying(false);
+      }
     });
   };
 
   const handleStop = (role: 'CREW' | 'IMPOSTER') => {
     if (!roomCode) return;
     socketRef.current.emit('stop_song', { roomCode, role }, () => {
-      if (role === 'CREW') { setCrewPlaying(false); setCrewPosition(0); }
-      else { setImposterPlaying(false); setImposterPosition(0); }
+      if (role === 'CREW') {
+        setCrewPlaying(false);
+        setCrewPosition(0);
+      } else {
+        setImposterPlaying(false);
+        setImposterPosition(0);
+      }
     });
   };
 
@@ -213,7 +270,11 @@ export default function HostDashboard() {
     if (!roomCode) return;
     socketRef.current.emit('start_round', { roomCode }, (res: { success: boolean; error?: string }) => {
       if (!res.success) showToast(res.error || 'Could not start round', 'error');
-      else { setCrewPlaying(true); setImposterPlaying(true); setImposterRevealed(null); }
+      else {
+        setCrewPlaying(true);
+        setImposterPlaying(true);
+        setImposterRevealed(null);
+      }
     });
   };
 
@@ -258,11 +319,11 @@ export default function HostDashboard() {
   const players = roomState?.players || [];
   const connectedCount = roomState?.connected || 0;
   const totalCount = roomState?.total || 0;
-  const allReady = players.filter(p => p.isConnected).every(p => p.isReady) && players.length > 0;
-  const hasRoles = players.some(p => p.role);
+  const allReady = players.filter((p) => p.isConnected).every((p) => p.isReady) && players.length > 0;
+  const hasRoles = players.some((p) => p.role);
 
   // ── Pre-room: enter host name ──────────────────────────────────────────────
-  if (!nameEntered) {
+  if (!nameEntered || !roomCode) {
     return (
       <div className="page-container" style={{ justifyContent: 'center' }}>
         <div className="animate-fade-in" style={{ width: '100%' }}>
@@ -271,6 +332,7 @@ export default function HostDashboard() {
             <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Game Master</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>You control the game</p>
           </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <input
               className="input"
@@ -278,31 +340,46 @@ export default function HostDashboard() {
               placeholder="Your name (e.g. Host)"
               value={hostName}
               onChange={(e) => setHostName(e.target.value.slice(0, 20))}
-              onKeyDown={(e) => { if (e.key === 'Enter' && hostName.trim()) { setNameEntered(true); setTimeout(createRoom, 100); } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && hostName.trim() && !creating) createRoom();
+              }}
               autoFocus
             />
+
             <button
               className="btn btn-primary btn-lg btn-full"
-              onClick={() => { setNameEntered(true); setTimeout(createRoom, 100); }}
-              disabled={!hostName.trim() || !connected}
+              onClick={createRoom}
+              disabled={!hostName.trim() || creating}
             >
-              {connected ? '🚀 Create Room' : '⏳ Connecting...'}
+              {creating ? (
+                <>
+                  <span
+                    className="animate-spin"
+                    style={{
+                      display: 'inline-block',
+                      width: '18px',
+                      height: '18px',
+                      border: '2px solid rgba(255,255,255,0.3)',
+                      borderTopColor: 'white',
+                      borderRadius: '50%',
+                      marginRight: '8px',
+                    }}
+                  />
+                  <span>Creating Room...</span>
+                </>
+              ) : (
+                '🚀 Create Room'
+              )}
             </button>
-            <button className="btn btn-ghost btn-full" onClick={() => router.push('/')}>← Back</button>
+
+            <button className="btn btn-ghost btn-full" onClick={() => router.push('/')}>
+              ← Back
+            </button>
           </div>
         </div>
-      </div>
-    );
-  }
 
-  // ── Creating room spinner ──────────────────────────────────────────────────
-  if (!roomCode || creating) {
-    return (
-      <div className="page-container" style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ textAlign: 'center' }}>
-          <div className="animate-spin" style={{ width: '48px', height: '48px', border: '3px solid rgba(124,58,237,0.2)', borderTopColor: 'var(--crew-primary)', borderRadius: '50%', margin: '0 auto 20px' }} />
-          <p style={{ color: 'var(--text-secondary)' }}>Creating room...</p>
-        </div>
+        {/* Toast inside pre-room */}
+        {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
       </div>
     );
   }
@@ -310,13 +387,14 @@ export default function HostDashboard() {
   // ── Main dashboard ─────────────────────────────────────────────────────────
   return (
     <div className="page-container-wide" style={{ gap: '20px', paddingBottom: '40px' }}>
-
       {/* ── Top Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <span className="logo-text">🎵 Find the Imposter</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className={`status-dot ${connected ? 'status-dot-green' : 'status-dot-red'}`} />
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{connected ? 'Live' : 'Offline'}</span>
+          <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+            {connected ? 'Live' : 'Offline'}
+          </span>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={endGame} style={{ color: 'var(--imposter-light)' }}>
           End Game
@@ -324,13 +402,20 @@ export default function HostDashboard() {
       </div>
 
       {/* ── Room Code Banner ── */}
-      <div className="card" style={{ padding: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
+      <div
+        className="card"
+        style={{ padding: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}
+      >
         <div style={{ flex: 1 }}>
-          <div className="section-label" style={{ marginBottom: '6px' }}>Room Code</div>
+          <div className="section-label" style={{ marginBottom: '6px' }}>
+            Room Code
+          </div>
           <div className="room-code">{roomCode}</div>
           <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
             {connectedCount}/{totalCount} connected
-            {connectedCount === totalCount && totalCount > 0 && <span style={{ color: 'var(--accent-green)', marginLeft: '8px' }}>● All connected</span>}
+            {connectedCount === totalCount && totalCount > 0 && (
+              <span style={{ color: 'var(--accent-green)', marginLeft: '8px' }}>● All connected</span>
+            )}
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -342,12 +427,36 @@ export default function HostDashboard() {
           </button>
         </div>
         {showQR && (
-          <div style={{ width: '100%', display: 'flex', gap: '20px', alignItems: 'flex-start', flexWrap: 'wrap', paddingTop: '12px', borderTop: '1px solid var(--border-subtle)' }}>
+          <div
+            style={{
+              width: '100%',
+              display: 'flex',
+              gap: '20px',
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+              paddingTop: '12px',
+              borderTop: '1px solid var(--border-subtle)',
+            }}
+          >
             <QRCode text={joinUrl} size={160} />
             <div>
-              <div className="section-label" style={{ marginBottom: '6px' }}>Share this link</div>
-              <div style={{ fontFamily: 'monospace', fontSize: '0.85rem', color: 'var(--crew-light)', wordBreak: 'break-all' }}>{joinUrl}</div>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>Players scan QR or visit the link, then enter code: <strong style={{ color: 'var(--text-primary)' }}>{roomCode}</strong></p>
+              <div className="section-label" style={{ marginBottom: '6px' }}>
+                Share this link
+              </div>
+              <div
+                style={{
+                  fontFamily: 'monospace',
+                  fontSize: '0.85rem',
+                  color: 'var(--crew-light)',
+                  wordBreak: 'break-all',
+                }}
+              >
+                {joinUrl}
+              </div>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginTop: '8px' }}>
+                Players scan QR or visit the link, then enter code:{' '}
+                <strong style={{ color: 'var(--text-primary)' }}>{roomCode}</strong>
+              </p>
             </div>
           </div>
         )}
@@ -364,10 +473,8 @@ export default function HostDashboard() {
       )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px' }}>
-
         {/* ── Left Column: Players + Roles ── */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-
           {/* Players */}
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
@@ -389,11 +496,7 @@ export default function HostDashboard() {
               <span className="section-label">Role Controls</span>
               <div style={{ height: '1px', flex: 1, background: 'var(--border-subtle)' }} />
             </div>
-            <button
-              className="btn btn-primary btn-full"
-              onClick={randomizeRoles}
-              disabled={players.length < 2}
-            >
+            <button className="btn btn-primary btn-full" onClick={randomizeRoles} disabled={players.length < 2}>
               🎲 Randomize Roles
             </button>
             {(state === 'NEXT_ROUND' || state === 'ROUND_COMPLETE') && (
@@ -421,7 +524,9 @@ export default function HostDashboard() {
                 disabled={!allReady}
                 title={!allReady ? 'Waiting for all players to be ready' : ''}
               >
-                {allReady ? '🚀 Start Round' : `⏳ Waiting (${players.filter(p => p.isReady && p.isConnected).length}/${players.filter(p => p.isConnected).length} ready)`}
+                {allReady
+                  ? '🚀 Start Round'
+                  : `⏳ Waiting (${players.filter((p) => p.isReady && p.isConnected).length}/${players.filter((p) => p.isConnected).length} ready)`}
               </button>
             )}
 
@@ -440,11 +545,23 @@ export default function HostDashboard() {
             {/* Game state indicator */}
             <div className="card" style={{ padding: '12px', textAlign: 'center' }}>
               <span className="section-label">Game State: </span>
-              <span style={{ fontWeight: 700, color: state === 'PLAYING' ? 'var(--accent-green)' : state === 'ROUND_COMPLETE' ? 'var(--accent-gold)' : 'var(--text-secondary)' }}>
+              <span
+                style={{
+                  fontWeight: 700,
+                  color:
+                    state === 'PLAYING'
+                      ? 'var(--accent-green)'
+                      : state === 'ROUND_COMPLETE'
+                      ? 'var(--accent-gold)'
+                      : 'var(--text-secondary)',
+                }}
+              >
                 {state || 'LOBBY'}
               </span>
               {' · '}
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Round {roomState?.round || 1}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                Round {roomState?.round || 1}
+              </span>
             </div>
           </div>
         </div>
@@ -466,7 +583,10 @@ export default function HostDashboard() {
             onPlay={() => handlePlay('CREW')}
             onPause={() => handlePause('CREW')}
             onStop={() => handleStop('CREW')}
-            onRestart={() => { handleStop('CREW'); setTimeout(() => handlePlay('CREW'), 200); }}
+            onRestart={() => {
+              handleStop('CREW');
+              setTimeout(() => handlePlay('CREW'), 200);
+            }}
             onSeek={(pos) => handleSeek('CREW', pos)}
           />
 
@@ -480,16 +600,17 @@ export default function HostDashboard() {
             onPlay={() => handlePlay('IMPOSTER')}
             onPause={() => handlePause('IMPOSTER')}
             onStop={() => handleStop('IMPOSTER')}
-            onRestart={() => { handleStop('IMPOSTER'); setTimeout(() => handlePlay('IMPOSTER'), 200); }}
+            onRestart={() => {
+              handleStop('IMPOSTER');
+              setTimeout(() => handlePlay('IMPOSTER'), 200);
+            }}
             onSeek={(pos) => handleSeek('IMPOSTER', pos)}
           />
         </div>
       </div>
 
       {/* Toast */}
-      {toast && (
-        <div className={`toast toast-${toast.type}`}>{toast.msg}</div>
-      )}
+      {toast && <div className={`toast toast-${toast.type}`}>{toast.msg}</div>}
     </div>
   );
 }
