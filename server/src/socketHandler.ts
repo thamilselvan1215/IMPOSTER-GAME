@@ -685,6 +685,33 @@ export function registerSocketHandlers(io: Server) {
       }
     );
 
+    // ── PLAYER HEARTBEAT ──────────────────────────────────────────────────────
+    socket.on(
+      'player_heartbeat',
+      async (data: { roomCode: string; sessionId: string }) => {
+        const code = (data.roomCode || '').trim().toUpperCase();
+        const room = await getRoom(code);
+        if (!room) return;
+        const player = room.players.get(data.sessionId);
+        if (player) {
+          let updated = false;
+          if (!player.isConnected) {
+            player.isConnected = true;
+            updated = true;
+          }
+          if (player.socketId !== socket.id) {
+            player.socketId = socket.id;
+            sessionMap.set(data.sessionId, socket.id);
+            connectionMap.set(socket.id, { sessionId: data.sessionId, roomCode: room.code, isHost: false });
+            updated = true;
+          }
+          if (updated) {
+            io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
+          }
+        }
+      }
+    );
+
     // ── DISCONNECT ───────────────────────────────────────────────────────────
     socket.on('disconnecting', async () => {
       const conn = connectionMap.get(socket.id);
@@ -695,24 +722,31 @@ export function registerSocketHandlers(io: Server) {
       if (!room) return;
 
       if (isHost) {
-        room.hostDisconnectedAt = Date.now();
-        io.to(`room:${roomCode}`).emit('host_disconnected', {});
-        console.log(`[Room] Host disconnected from ${roomCode}`);
+        if (room.hostSocketId === socket.id) {
+          room.hostDisconnectedAt = Date.now();
+          io.to(`room:${roomCode}`).emit('host_disconnected', {});
+          console.log(`[Room] Host disconnected from ${roomCode}`);
+        }
       } else {
-        await updatePlayer(roomCode, sessionId, { isConnected: false });
         const player = room.players.get(sessionId);
-        io.to(`room:${roomCode}:host`).emit('player_disconnected', {
-          playerId: sessionId,
-          playerName: player?.name,
-        });
-        io.to(`room:${roomCode}:host`).emit('room_state', buildHostRoomState(room));
-        io.to(`room:${roomCode}`).emit('player_left', {
-          playerId: sessionId,
-          playerName: player?.name,
-          connected: connectedCount(room),
-          total: room.players.size,
-        });
-        console.log(`[Room] ${player?.name} disconnected from ${roomCode}`);
+        // Only mark disconnected if this socket is STILL the player's active socket
+        if (player && player.socketId === socket.id) {
+          await updatePlayer(roomCode, sessionId, { isConnected: false });
+          io.to(`room:${roomCode}:host`).emit('player_disconnected', {
+            playerId: sessionId,
+            playerName: player?.name,
+          });
+          io.to(`room:${roomCode}:host`).emit('room_state', buildHostRoomState(room));
+          io.to(`room:${roomCode}`).emit('player_left', {
+            playerId: sessionId,
+            playerName: player?.name,
+            connected: connectedCount(room),
+            total: room.players.size,
+          });
+          console.log(`[Room] ${player?.name} disconnected from ${roomCode}`);
+        } else {
+          console.log(`[Room] Ignored stale disconnect for ${player?.name} (socket: ${socket.id})`);
+        }
       }
     });
 

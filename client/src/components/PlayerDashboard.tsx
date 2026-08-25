@@ -98,6 +98,18 @@ export default function PlayerDashboard() {
     };
   }, [searchParams, router]);
 
+  // Heartbeat to maintain active online status on server
+  useEffect(() => {
+    if (!roomCode) return;
+    const socket = socketRef.current;
+    const interval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('player_heartbeat', { roomCode, sessionId: sessionId.current });
+      }
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [roomCode]);
+
   // Socket events
   useEffect(() => {
     const socket = socketRef.current;
