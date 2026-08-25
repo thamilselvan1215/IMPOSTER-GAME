@@ -183,7 +183,8 @@ export function registerSocketHandlers(io: Server) {
         callback?: any
       ) => {
         try {
-          const room = await getRoom(data.roomCode);
+          const code = (data.roomCode || '').trim().toUpperCase();
+          const room = await getRoom(code);
           if (!room) return callback({ success: false, error: 'ROOM_NOT_FOUND' });
           if (room.state === 'GAME_OVER')
             return callback({ success: false, error: 'GAME_OVER' });

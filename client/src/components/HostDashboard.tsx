@@ -90,9 +90,14 @@ export default function HostDashboard() {
       setImposterRevealed(data.imposters.map((i) => i.name));
     };
 
+    const onPlayerJoined = (data: { name: string }) => {
+      if (data?.name) showToast(`🎉 ${data.name} joined the game!`, 'success');
+    };
+
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('room_state', onRoomState);
+    socket.on('player_joined', onPlayerJoined);
     socket.on('roles_assigned', onRolesAssigned);
     socket.on('all_players_ready', onAllReady);
     socket.on('player_ready_update', onPlayerReadyUpdate);
