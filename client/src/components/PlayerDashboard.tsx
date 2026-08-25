@@ -15,7 +15,6 @@ export default function PlayerDashboard() {
   const [roomCode, setRoomCode] = useState<string>('');
   const [playerName, setPlayerName] = useState<string>('');
   const [gameState, setGameState] = useState<GameState>('LOBBY');
-  const [role, setRole] = useState<PlayerRole | null>(null);
   const [connected, setConnected] = useState(false);
   const [reconnecting, setReconnecting] = useState(false);
   const [hostDisconnected, setHostDisconnected] = useState(false);
@@ -104,7 +103,6 @@ export default function PlayerDashboard() {
     };
 
     const onRoleAssigned = (data: { role: PlayerRole; videoId?: string }) => {
-      setRole(data.role);
       setGameState('READY_CHECK');
       setPlayerReady(false);
       if (data.videoId) {
@@ -120,7 +118,6 @@ export default function PlayerDashboard() {
       expectedPosition: number;
       isPlaying: boolean;
     }) => {
-      if (data.role) setRole(data.role);
       setGameState(data.state);
       if (data.videoId) {
         setCurrentVideoId(data.videoId);
@@ -180,7 +177,6 @@ export default function PlayerDashboard() {
       }
       if (data.state === 'NEXT_ROUND') {
         setPlayerReady(false);
-        setRole(null);
         setCurrentVideoId(null);
       }
     };
@@ -293,15 +289,6 @@ export default function PlayerDashboard() {
     );
   }
 
-  const isCrew = role === 'CREW';
-  const roleColor = role ? (isCrew ? 'var(--crew-primary)' : 'var(--imposter-primary)') : 'transparent';
-  const roleGlow = role ? (isCrew ? 'var(--crew-glow)' : 'var(--imposter-glow)') : 'none';
-  const roleColorLight = role
-    ? isCrew
-      ? 'var(--crew-light)'
-      : 'var(--imposter-light)'
-    : 'var(--text-primary)';
-
   return (
     <div className="page-container" style={{ justifyContent: 'flex-start', paddingTop: '24px', gap: '16px' }}>
       {/* Hidden YouTube player — audio only */}
@@ -384,26 +371,25 @@ export default function PlayerDashboard() {
         >
           <div style={{ fontSize: '2.5rem' }}>⏳</div>
           <h2 style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>Waiting for Game Master...</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Roles will be assigned soon.</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Song assignment is in progress.</p>
         </div>
       )}
 
-      {/* ── ROLE ASSIGNMENT (role just assigned, not yet ready) ── */}
-      {gameState === 'READY_CHECK' && role && !playerReady && (
+      {/* ── READY CHECK (Songs assigned, not yet ready) ── */}
+      {gameState === 'READY_CHECK' && !playerReady && (
         <div className="animate-flip-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Role Card */}
+          {/* Audio Assignment Card (NO ROLE SHOWN) */}
           <div
             className="card"
             style={{
               padding: '40px 24px',
               textAlign: 'center',
-              border: `2px solid ${roleColor}`,
-              background: isCrew ? 'rgba(124,58,237,0.08)' : 'rgba(239,68,68,0.08)',
-              boxShadow: `0 0 40px ${roleGlow}`,
-              animation: `${isCrew ? 'glow-crew' : 'glow-imposter'} 2s ease-in-out infinite`,
+              border: '2px solid var(--purple-light)',
+              background: 'rgba(124,58,237,0.08)',
+              boxShadow: '0 0 30px var(--crew-glow)',
             }}
           >
-            <div style={{ fontSize: '4rem', marginBottom: '12px' }}>{isCrew ? '👥' : '🕵️'}</div>
+            <div style={{ fontSize: '4rem', marginBottom: '12px' }}>🎧</div>
             <div
               style={{
                 fontSize: '0.8rem',
@@ -413,24 +399,21 @@ export default function PlayerDashboard() {
                 marginBottom: '8px',
               }}
             >
-              YOUR ROLE
+              AUDIO ASSIGNED
             </div>
             <div
-              style={{ fontSize: '2.5rem', fontWeight: 900, color: roleColorLight, letterSpacing: '-0.02em' }}
+              style={{ fontSize: '2rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}
             >
-              {isCrew ? 'CREW' : 'IMPOSTER'}
+              Song Ready
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '12px' }}>
-              {isCrew ? '🎵 You will hear the crew song.' : '🎵 You will hear the imposter song.'}
-            </div>
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', marginTop: '8px', fontStyle: 'italic' }}>
-              Keep this secret!
+              Tap Ready to enable audio playback on your device.
             </div>
           </div>
 
           {/* Ready Button */}
           <button
-            className={`btn btn-lg btn-full ${isCrew ? 'btn-primary' : 'btn-danger'}`}
+            className="btn btn-lg btn-full btn-primary"
             onClick={handleReady}
             style={{ marginTop: '8px' }}
           >
@@ -438,8 +421,7 @@ export default function PlayerDashboard() {
             <span>Ready to Play</span>
           </button>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem', textAlign: 'center', lineHeight: 1.5 }}>
-            Tap Ready to enable audio on your device.<br />
-            The game starts when everyone is ready.
+            The round starts when all players tap Ready.
           </p>
         </div>
       )}
@@ -461,13 +443,6 @@ export default function PlayerDashboard() {
           <div style={{ fontSize: '2rem' }}>✅</div>
           <h2 style={{ color: 'var(--accent-green)', fontSize: '1.2rem' }}>You're Ready!</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Waiting for Game Master to start...</p>
-          {role && (
-            <div style={{ marginTop: '8px' }}>
-              <span className={`role-badge ${isCrew ? 'role-badge-crew' : 'role-badge-imposter'}`}>
-                {isCrew ? '👥 CREW' : '🕵️ IMPOSTER'}
-              </span>
-            </div>
-          )}
         </div>
       )}
 
@@ -483,8 +458,8 @@ export default function PlayerDashboard() {
             flexDirection: 'column',
             justifyContent: 'center',
             gap: '20px',
-            border: `1px solid ${roleColor}`,
-            background: isCrew ? 'rgba(124,58,237,0.06)' : 'rgba(239,68,68,0.06)',
+            border: '1px solid var(--purple-light)',
+            background: 'rgba(124,58,237,0.06)',
           }}
         >
           {/* Animated sound waves */}
@@ -494,7 +469,7 @@ export default function PlayerDashboard() {
                 key={i}
                 style={{
                   width: '4px',
-                  background: roleColorLight,
+                  background: 'var(--crew-light)',
                   borderRadius: '2px',
                   animation: `pulse-green ${0.5 + i * 0.1}s ease-in-out infinite alternate`,
                   animationDelay: `${i * 0.07}s`,
@@ -510,22 +485,15 @@ export default function PlayerDashboard() {
             <div
               style={{ fontSize: '0.75rem', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px' }}
             >
-              {isPlaying ? 'NOW PLAYING' : 'WAITING FOR AUDIO'}
+              {isPlaying ? 'NOW PLAYING' : 'LISTENING...'}
             </div>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: roleColorLight }}>
-              {isCrew ? '🎵 Crew Song' : '🎵 Imposter Song'}
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: 'var(--crew-light)' }}>
+              🎵 Playing Audio
             </h2>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>
-              Listen carefully. Find the imposter.
+              Listen carefully to your song. Figure out who is hearing a different song.
             </p>
           </div>
-
-          <span
-            className={`role-badge ${isCrew ? 'role-badge-crew' : 'role-badge-imposter'}`}
-            style={{ alignSelf: 'center' }}
-          >
-            {isCrew ? '👥 CREW' : '🕵️ IMPOSTER'}
-          </span>
         </div>
       )}
 
@@ -566,7 +534,7 @@ export default function PlayerDashboard() {
           <div style={{ fontSize: '3rem' }}>🏁</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Round Over!</h2>
 
-          {/* Discussion prompt */}
+          {/* Discussion prompt — NO ROLES SHOWN TO PLAYERS */}
           <div
             style={{
               padding: '20px',
@@ -581,18 +549,9 @@ export default function PlayerDashboard() {
             </div>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', lineHeight: 1.6 }}>
               Who was hearing a different song?<br />
-              Vote for who you think the imposter is.
+              Discuss and vote for who you think the imposter is.
             </p>
           </div>
-
-          {role && (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              You were{' '}
-              <span style={{ fontWeight: 700, color: isCrew ? 'var(--crew-light)' : 'var(--imposter-light)' }}>
-                {isCrew ? 'Crew 👥' : 'the Imposter 🕵️'}
-              </span>
-            </div>
-          )}
 
           <p style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>Waiting for Game Master...</p>
         </div>
@@ -614,7 +573,7 @@ export default function PlayerDashboard() {
         >
           <div style={{ fontSize: '3rem' }}>🔄</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Next Round</h2>
-          <p style={{ color: 'var(--text-secondary)' }}>New roles are being assigned...</p>
+          <p style={{ color: 'var(--text-secondary)' }}>New songs are being assigned...</p>
         </div>
       )}
     </div>
