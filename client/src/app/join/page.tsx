@@ -1,12 +1,11 @@
 'use client';
 import { useState, useEffect, Suspense } from 'react';
-import { useSearchParams, useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { connectSocket } from '@/lib/socket';
 import { getOrCreateSessionId, saveRoomSession } from '@/lib/session';
 import Link from 'next/link';
 
 function JoinForm() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const [roomCode, setRoomCode] = useState('');
   const [playerName, setPlayerName] = useState('');
@@ -71,18 +70,19 @@ function JoinForm() {
           if (timeoutId) clearTimeout(timeoutId);
           setLoading(false);
 
-          if (res.success) {
+          if (res?.success) {
             saveRoomSession(code, name, false);
-            router.push(`/player?room=${code}&name=${encodeURIComponent(name)}`);
+            // Hard window navigation for 100% reliable mobile browser redirect
+            window.location.href = `/player?room=${code}&name=${encodeURIComponent(name)}`;
           } else {
             const msgs: Record<string, string> = {
-              ROOM_NOT_FOUND: 'Room not found. Check the room code and try again.',
+              ROOM_NOT_FOUND: `Room "${code}" not found. Create a new room on the laptop screen first.`,
               ROOM_FULL: 'This room is full (15 players max).',
               DUPLICATE_NAME: 'That name is already taken in this room. Choose another.',
               GAME_IN_PROGRESS: 'The game has already started.',
               GAME_OVER: 'This game has ended.',
             };
-            setError(msgs[res.error || ''] || 'Could not join. Try again.');
+            setError(msgs[res?.error || ''] || 'Could not join room. Try again.');
           }
         }
       );
@@ -136,7 +136,7 @@ function JoinForm() {
           </p>
         </div>
 
-        {/* Form Container (using div to prevent native mobile HTML form refreshes) */}
+        {/* Form Container */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Room Code */}
           <div>
@@ -189,13 +189,14 @@ function JoinForm() {
           {error && (
             <div
               style={{
-                padding: '12px 16px',
-                background: 'rgba(239,68,68,0.1)',
-                border: '1px solid rgba(239,68,68,0.3)',
+                padding: '14px 16px',
+                background: 'rgba(239,68,68,0.15)',
+                border: '1px solid rgba(239,68,68,0.4)',
                 borderRadius: 'var(--radius-md)',
                 color: 'var(--imposter-light)',
                 fontSize: '0.9rem',
                 textAlign: 'center',
+                lineHeight: 1.4,
               }}
             >
               ⚠️ {error}
