@@ -750,11 +750,13 @@ export function registerSocketHandlers(io: Server) {
 
     // ── GET ROOM STATE (for host dashboard refresh) ──────────────────────────
     socket.on('get_room_state', async (data: { roomCode: string }, callback?: any) => {
-      const conn = connectionMap.get(socket.id);
-      if (!conn?.isHost) return callback?.({ success: false, error: 'NOT_HOST' });
       const room = await getRoom(data.roomCode);
       if (!room) return callback?.({ success: false, error: 'ROOM_NOT_FOUND' });
-      callback?.({ success: true, state: buildHostRoomState(room) });
+      // Return full host state (with roles) if caller is host, public state otherwise
+      const conn = connectionMap.get(socket.id);
+      const state = conn?.isHost ? buildHostRoomState(room) : buildPublicRoomState(room);
+      callback?.({ success: true, state });
     });
   });
 }
+

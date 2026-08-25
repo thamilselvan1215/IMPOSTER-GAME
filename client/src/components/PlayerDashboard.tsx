@@ -60,28 +60,40 @@ export default function PlayerDashboard() {
     const socket = socketRef.current;
     if (!socket.connected) socket.connect();
 
+    // Called every time the socket connects (initial join AND every reconnect).
+    // Re-emitting join_room on reconnect updates isConnected=true on the server
+    // so the host dashboard shows the correct status.
     const doJoin = () => {
       socket.emit(
         'join_room',
         { roomCode: code, playerName: name, sessionId: sessionId.current },
         (res: { success: boolean; sessionId?: string; error?: string; reconnected?: boolean }) => {
           if (!res.success) {
-            const msgs: Record<string, string> = {
-              ROOM_NOT_FOUND: 'Room not found.',
-              GAME_IN_PROGRESS: 'Game already in progress.',
-              ROOM_FULL: 'Room is full.',
-            };
-            alert(msgs[res.error || ''] || 'Could not join game.');
-            router.push('/join');
+            // Only redirect on hard failures, not temporary ones
+            if (res.error === 'ROOM_NOT_FOUND' || res.error === 'ROOM_FULL') {
+              const msgs: Record<string, string> = {
+                ROOM_NOT_FOUND: 'Room not found.',
+                GAME_IN_PROGRESS: 'Game already in progress.',
+                ROOM_FULL: 'Room is full.',
+              };
+              alert(msgs[res.error || ''] || 'Could not join game.');
+              router.push('/join');
+            }
+            // GAME_IN_PROGRESS is ok — player is reconnecting mid-game
           }
         }
       );
     };
 
+    // On first connect
     if (socket.connected) doJoin();
     else socket.once('connect', doJoin);
 
+    // On every subsequent reconnect, re-join to update server's isConnected status
+    socket.on('connect', doJoin);
+
     return () => {
+      socket.off('connect', doJoin);
       if (playTimerRef.current) clearTimeout(playTimerRef.current);
     };
   }, [searchParams, router]);

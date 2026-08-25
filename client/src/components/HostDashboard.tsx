@@ -168,6 +168,25 @@ export default function HostDashboard() {
     }
   }, []);
 
+  // Periodically refresh room state from the server (every 8s) as a safety net
+  // so the host always sees up-to-date player connection status even if a socket
+  // event was lost (e.g. during mobile reconnection).
+  useEffect(() => {
+    if (!roomCode) return;
+    const socket = socketRef.current;
+    const interval = setInterval(() => {
+      if (!socket.connected) return;
+      socket.emit('get_room_state', { roomCode }, (res: { success: boolean; state?: any }) => {
+        if (res?.success && res.state) {
+          setRoomState(res.state);
+        }
+      });
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [roomCode]);
+
+
+
   const createRoom = () => {
     const name = hostName.trim();
     if (!name) return;
