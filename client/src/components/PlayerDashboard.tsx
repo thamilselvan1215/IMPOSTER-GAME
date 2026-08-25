@@ -50,7 +50,10 @@ export default function PlayerDashboard() {
     const code = qRoom || session?.roomCode || '';
     const name = qName ? decodeURIComponent(qName) : session?.playerName || '';
 
-    if (!code || !name) { router.push('/join'); return; }
+    if (!code || !name) {
+      router.push('/join');
+      return;
+    }
 
     setRoomCode(code);
     setPlayerName(name);
@@ -59,32 +62,46 @@ export default function PlayerDashboard() {
     if (!socket.connected) socket.connect();
 
     const doJoin = () => {
-      socket.emit('join_room', { roomCode: code, playerName: name, sessionId: sessionId.current }, (res: { success: boolean; sessionId?: string; error?: string; reconnected?: boolean }) => {
-        if (!res.success) {
-          const msgs: Record<string, string> = {
-            ROOM_NOT_FOUND: 'Room not found.',
-            GAME_IN_PROGRESS: 'Game already in progress.',
-            ROOM_FULL: 'Room is full.',
-          };
-          alert(msgs[res.error || ''] || 'Could not join game.');
-          router.push('/join');
+      socket.emit(
+        'join_room',
+        { roomCode: code, playerName: name, sessionId: sessionId.current },
+        (res: { success: boolean; sessionId?: string; error?: string; reconnected?: boolean }) => {
+          if (!res.success) {
+            const msgs: Record<string, string> = {
+              ROOM_NOT_FOUND: 'Room not found.',
+              GAME_IN_PROGRESS: 'Game already in progress.',
+              ROOM_FULL: 'Room is full.',
+            };
+            alert(msgs[res.error || ''] || 'Could not join game.');
+            router.push('/join');
+          }
         }
-      });
+      );
     };
 
     if (socket.connected) doJoin();
     else socket.once('connect', doJoin);
 
-    return () => { if (playTimerRef.current) clearTimeout(playTimerRef.current); };
+    return () => {
+      if (playTimerRef.current) clearTimeout(playTimerRef.current);
+    };
   }, [searchParams, router]);
 
   // Socket events
   useEffect(() => {
     const socket = socketRef.current;
 
-    const onConnect = () => { setConnected(true); setReconnecting(false); };
-    const onDisconnect = () => { setConnected(false); setReconnecting(true); };
-    const onReconnected = () => { setReconnecting(false); };
+    const onConnect = () => {
+      setConnected(true);
+      setReconnecting(false);
+    };
+    const onDisconnect = () => {
+      setConnected(false);
+      setReconnecting(true);
+    };
+    const onReconnected = () => {
+      setReconnecting(false);
+    };
 
     const onRoleAssigned = (data: { role: PlayerRole; videoId?: string }) => {
       setRole(data.role);
@@ -92,12 +109,16 @@ export default function PlayerDashboard() {
       setPlayerReady(false);
       if (data.videoId) {
         setCurrentVideoId(data.videoId);
+        ytRef.current?.loadVideo(data.videoId);
       }
     };
 
     const onReconnectedState = (data: {
-      role?: PlayerRole; state: GameState; videoId?: string;
-      expectedPosition: number; isPlaying: boolean;
+      role?: PlayerRole;
+      state: GameState;
+      videoId?: string;
+      expectedPosition: number;
+      isPlaying: boolean;
     }) => {
       if (data.role) setRole(data.role);
       setGameState(data.state);
@@ -110,26 +131,24 @@ export default function PlayerDashboard() {
             ytRef.current?.play();
             setIsPlaying(true);
           }
-        }, 1000);
+        }, 800);
       }
     };
 
     const onSongLoaded = (data: { videoId: string }) => {
       setCurrentVideoId(data.videoId);
-      if (ytReady) {
-        ytRef.current?.loadVideo(data.videoId);
-      }
+      ytRef.current?.loadVideo(data.videoId);
     };
 
     const onPlayCommand = (data: PlayCommand) => {
-      setCurrentVideoId(data.videoId);
-      if (ytReady) {
+      if (data.videoId) {
+        setCurrentVideoId(data.videoId);
         ytRef.current?.loadVideo(data.videoId);
-        schedulePlay(data.startAt, data.startPosition);
       }
+      schedulePlay(data.startAt, data.startPosition);
     };
 
-    const onPauseCommand = (data: { position?: number }) => {
+    const onPauseCommand = () => {
       if (playTimerRef.current) clearTimeout(playTimerRef.current);
       ytRef.current?.pause();
       setIsPlaying(false);
@@ -166,10 +185,12 @@ export default function PlayerDashboard() {
       }
     };
 
-    const onRoundEnded = () => { setGameState('ROUND_COMPLETE'); };
-    // NOTE: imposter_revealed is NOT listened to here — players must
-    // figure out the imposter themselves through discussion and voting.
-    const onRoundStarted = () => { setGameState('PLAYING'); };
+    const onRoundEnded = () => {
+      setGameState('ROUND_COMPLETE');
+    };
+    const onRoundStarted = () => {
+      setGameState('PLAYING');
+    };
     const onHostDisconnected = () => setHostDisconnected(true);
     const onHostReconnected = () => setHostDisconnected(false);
     const onKicked = () => setKicked(true);
@@ -188,7 +209,6 @@ export default function PlayerDashboard() {
     socket.on('game_state_update', onGameStateUpdate);
     socket.on('round_started', onRoundStarted);
     socket.on('round_ended', onRoundEnded);
-    // No listener for 'imposter_revealed' on player — host only
     socket.on('host_disconnected', onHostDisconnected);
     socket.on('host_reconnected', onHostReconnected);
     socket.on('kicked', onKicked);
@@ -214,11 +234,11 @@ export default function PlayerDashboard() {
       socket.off('host_reconnected', onHostReconnected);
       socket.off('kicked', onKicked);
     };
-  }, [schedulePlay, ytReady]);
+  }, [schedulePlay]);
 
-  // Load video when YT becomes ready
+  // Load video when YT becomes ready or videoId changes
   useEffect(() => {
-    if (ytReady && currentVideoId) {
+    if (currentVideoId) {
       ytRef.current?.loadVideo(currentVideoId);
     }
   }, [ytReady, currentVideoId]);
@@ -226,23 +246,30 @@ export default function PlayerDashboard() {
   const handleYtReady = useCallback(() => {
     setYtReady(true);
     setYtError(null);
-  }, []);
+    if (currentVideoId) {
+      ytRef.current?.loadVideo(currentVideoId);
+    }
+  }, [currentVideoId]);
 
   const handleYtError = useCallback((code: number) => {
     const msgs: Record<number, string> = {
       2: 'Invalid video ID.',
       5: 'HTML5 player error.',
       100: 'Video not found or removed.',
-      101: 'Video cannot be embedded.',
-      150: 'Video cannot be embedded.',
+      101: 'Video cannot be embedded by YouTube.',
+      150: 'Video cannot be embedded by YouTube.',
     };
     setYtError(msgs[code] || 'YouTube error. Try another video.');
   }, []);
 
   const handleReady = () => {
-    // This satisfies browser autoplay policy
-    if (currentVideoId && ytReady) {
+    // Satisfy mobile browser media user gesture autoplay unlock policy
+    if (currentVideoId) {
       ytRef.current?.loadVideo(currentVideoId);
+      ytRef.current?.play();
+      setTimeout(() => {
+        ytRef.current?.pause();
+      }, 150);
     }
     socketRef.current.emit('player_ready', { roomCode });
     setPlayerReady(true);
@@ -255,8 +282,12 @@ export default function PlayerDashboard() {
         <div className="animate-fade-in">
           <div style={{ fontSize: '3rem', marginBottom: '16px' }}>😔</div>
           <h1 style={{ marginBottom: '8px' }}>Removed from game</h1>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>The host removed you from the game.</p>
-          <button className="btn btn-primary" onClick={() => router.push('/')}>Back to Home</button>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
+            The host removed you from the game.
+          </p>
+          <button className="btn btn-primary" onClick={() => router.push('/')}>
+            Back to Home
+          </button>
         </div>
       </div>
     );
@@ -265,23 +296,28 @@ export default function PlayerDashboard() {
   const isCrew = role === 'CREW';
   const roleColor = role ? (isCrew ? 'var(--crew-primary)' : 'var(--imposter-primary)') : 'transparent';
   const roleGlow = role ? (isCrew ? 'var(--crew-glow)' : 'var(--imposter-glow)') : 'none';
-  const roleColorLight = role ? (isCrew ? 'var(--crew-light)' : 'var(--imposter-light)') : 'var(--text-primary)';
+  const roleColorLight = role
+    ? isCrew
+      ? 'var(--crew-light)'
+      : 'var(--imposter-light)'
+    : 'var(--text-primary)';
 
   return (
     <div className="page-container" style={{ justifyContent: 'flex-start', paddingTop: '24px', gap: '16px' }}>
       {/* Hidden YouTube player — audio only */}
-      <YouTubePlayer
-        ref={ytRef}
-        onReady={handleYtReady}
-        onError={handleYtError}
-        hidden
-      />
+      <YouTubePlayer ref={ytRef} onReady={handleYtReady} onError={handleYtError} hidden />
 
       {/* ── Header ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <span className="logo-text" style={{ fontSize: '1.1rem' }}>🎵 Find the Imposter</span>
+        <span className="logo-text" style={{ fontSize: '1.1rem' }}>
+          🎵 Find the Imposter
+        </span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <div className={`status-dot ${reconnecting ? 'status-dot-yellow' : connected ? 'status-dot-green' : 'status-dot-red'}`} />
+          <div
+            className={`status-dot ${
+              reconnecting ? 'status-dot-yellow' : connected ? 'status-dot-green' : 'status-dot-red'
+            }`}
+          />
           <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
             {reconnecting ? 'Reconnecting...' : connected ? `${roomCode}` : 'Offline'}
           </span>
@@ -290,28 +326,62 @@ export default function PlayerDashboard() {
 
       {/* ── Host disconnected warning ── */}
       {hostDisconnected && (
-        <div className="card" style={{ padding: '16px', textAlign: 'center', borderColor: 'rgba(245,158,11,0.4)', background: 'rgba(245,158,11,0.08)' }}>
+        <div
+          className="card"
+          style={{
+            padding: '16px',
+            textAlign: 'center',
+            borderColor: 'rgba(245,158,11,0.4)',
+            background: 'rgba(245,158,11,0.08)',
+          }}
+        >
           <div style={{ color: 'var(--accent-gold)', fontWeight: 700 }}>⚠️ Game Master disconnected</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>Waiting for reconnection...</div>
+          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
+            Waiting for reconnection...
+          </div>
         </div>
       )}
 
       {/* ── YT Error ── */}
       {ytError && (
-        <div className="card" style={{ padding: '12px 16px', borderColor: 'rgba(239,68,68,0.3)', background: 'rgba(239,68,68,0.08)', color: 'var(--imposter-light)', fontSize: '0.85rem' }}>
+        <div
+          className="card"
+          style={{
+            padding: '12px 16px',
+            borderColor: 'rgba(239,68,68,0.3)',
+            background: 'rgba(239,68,68,0.08)',
+            color: 'var(--imposter-light)',
+            fontSize: '0.85rem',
+          }}
+        >
           ⚠️ {ytError}
         </div>
       )}
 
       {/* ── Player name + status ── */}
       <div className="card" style={{ padding: '20px', textAlign: 'center' }}>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.1em' }}>PLAYER</div>
+        <div
+          style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.1em' }}
+        >
+          PLAYER
+        </div>
         <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>{playerName}</div>
       </div>
 
       {/* ── LOBBY / WAITING ── */}
       {(gameState === 'LOBBY' || gameState === 'WAITING') && (
-        <div className="card animate-fade-in" style={{ padding: '32px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '16px' }}>
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '32px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '16px',
+          }}
+        >
           <div style={{ fontSize: '2.5rem' }}>⏳</div>
           <h2 style={{ fontSize: '1.2rem', color: 'var(--text-secondary)' }}>Waiting for Game Master...</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Roles will be assigned soon.</p>
@@ -333,11 +403,21 @@ export default function PlayerDashboard() {
               animation: `${isCrew ? 'glow-crew' : 'glow-imposter'} 2s ease-in-out infinite`,
             }}
           >
-            <div style={{ fontSize: '4rem', marginBottom: '12px' }}>
-              {isCrew ? '👥' : '🕵️'}
+            <div style={{ fontSize: '4rem', marginBottom: '12px' }}>{isCrew ? '👥' : '🕵️'}</div>
+            <div
+              style={{
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                letterSpacing: '0.15em',
+                color: 'var(--text-muted)',
+                marginBottom: '8px',
+              }}
+            >
+              YOUR ROLE
             </div>
-            <div style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.15em', color: 'var(--text-muted)', marginBottom: '8px' }}>YOUR ROLE</div>
-            <div style={{ fontSize: '2.5rem', fontWeight: 900, color: roleColorLight, letterSpacing: '-0.02em' }}>
+            <div
+              style={{ fontSize: '2.5rem', fontWeight: 900, color: roleColorLight, letterSpacing: '-0.02em' }}
+            >
               {isCrew ? 'CREW' : 'IMPOSTER'}
             </div>
             <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '12px' }}>
@@ -366,11 +446,21 @@ export default function PlayerDashboard() {
 
       {/* ── Waiting after ready ── */}
       {gameState === 'READY_CHECK' && playerReady && (
-        <div className="card animate-fade-in" style={{ padding: '32px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '16px' }}>
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '32px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '16px',
+          }}
+        >
           <div style={{ fontSize: '2rem' }}>✅</div>
           <h2 style={{ color: 'var(--accent-green)', fontSize: '1.2rem' }}>You're Ready!</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Waiting for Game Master to start...</p>
-          {/* Show role reminder */}
           {role && (
             <div style={{ marginTop: '8px' }}>
               <span className={`role-badge ${isCrew ? 'role-badge-crew' : 'role-badge-imposter'}`}>
@@ -386,30 +476,40 @@ export default function PlayerDashboard() {
         <div
           className="card animate-fade-in"
           style={{
-            padding: '40px 24px', textAlign: 'center', flex: 1,
-            display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '20px',
+            padding: '40px 24px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '20px',
             border: `1px solid ${roleColor}`,
             background: isCrew ? 'rgba(124,58,237,0.06)' : 'rgba(239,68,68,0.06)',
           }}
         >
           {/* Animated sound waves */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', height: '40px' }}>
-            {[1,2,3,4,5,6,7].map((i) => (
-              <div key={i} style={{
-                width: '4px',
-                background: roleColorLight,
-                borderRadius: '2px',
-                animation: `pulse-green ${0.5 + i * 0.1}s ease-in-out infinite alternate`,
-                animationDelay: `${i * 0.07}s`,
-                height: `${20 + Math.sin(i) * 15}px`,
-                opacity: isPlaying ? 1 : 0.2,
-                transition: 'opacity 0.5s',
-              }} />
+            {[1, 2, 3, 4, 5, 6, 7].map((i) => (
+              <div
+                key={i}
+                style={{
+                  width: '4px',
+                  background: roleColorLight,
+                  borderRadius: '2px',
+                  animation: `pulse-green ${0.5 + i * 0.1}s ease-in-out infinite alternate`,
+                  animationDelay: `${i * 0.07}s`,
+                  height: `${20 + Math.sin(i) * 15}px`,
+                  opacity: isPlaying ? 1 : 0.2,
+                  transition: 'opacity 0.5s',
+                }}
+              />
             ))}
           </div>
 
           <div>
-            <div style={{ fontSize: '0.75rem', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px' }}>
+            <div
+              style={{ fontSize: '0.75rem', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '8px' }}
+            >
               {isPlaying ? 'NOW PLAYING' : 'WAITING FOR AUDIO'}
             </div>
             <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: roleColorLight }}>
@@ -420,7 +520,10 @@ export default function PlayerDashboard() {
             </p>
           </div>
 
-          <span className={`role-badge ${isCrew ? 'role-badge-crew' : 'role-badge-imposter'}`} style={{ alignSelf: 'center' }}>
+          <span
+            className={`role-badge ${isCrew ? 'role-badge-crew' : 'role-badge-imposter'}`}
+            style={{ alignSelf: 'center' }}
+          >
             {isCrew ? '👥 CREW' : '🕵️ IMPOSTER'}
           </span>
         </div>
@@ -428,7 +531,18 @@ export default function PlayerDashboard() {
 
       {/* ── PAUSED ── */}
       {gameState === 'PAUSED' && (
-        <div className="card animate-fade-in" style={{ padding: '40px 24px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '16px' }}>
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '40px 24px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '16px',
+          }}
+        >
           <div style={{ fontSize: '3rem' }}>⏸</div>
           <h2 style={{ color: 'var(--accent-gold)', fontSize: '1.2rem' }}>Game Paused</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>The Game Master paused the game.</p>
@@ -437,17 +551,30 @@ export default function PlayerDashboard() {
 
       {/* ── ROUND COMPLETE ── */}
       {gameState === 'ROUND_COMPLETE' && (
-        <div className="card animate-slide-up" style={{ padding: '32px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '20px' }}>
+        <div
+          className="card animate-slide-up"
+          style={{
+            padding: '32px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '20px',
+          }}
+        >
           <div style={{ fontSize: '3rem' }}>🏁</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Round Over!</h2>
 
-          {/* Discussion prompt — no imposter revealed */}
-          <div style={{
-            padding: '20px',
-            background: 'rgba(124,58,237,0.08)',
-            borderRadius: 'var(--radius-md)',
-            border: '1px solid rgba(124,58,237,0.25)',
-          }}>
+          {/* Discussion prompt */}
+          <div
+            style={{
+              padding: '20px',
+              background: 'rgba(124,58,237,0.08)',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid rgba(124,58,237,0.25)',
+            }}
+          >
             <div style={{ fontSize: '1.5rem', marginBottom: '8px' }}>🗣️</div>
             <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--crew-light)', marginBottom: '6px' }}>
               Discuss with your group!
@@ -458,7 +585,6 @@ export default function PlayerDashboard() {
             </p>
           </div>
 
-          {/* Show only the player's own role — never others */}
           {role && (
             <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
               You were{' '}
@@ -474,7 +600,18 @@ export default function PlayerDashboard() {
 
       {/* ── NEXT ROUND ── */}
       {gameState === 'NEXT_ROUND' && (
-        <div className="card animate-fade-in" style={{ padding: '40px 24px', textAlign: 'center', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '16px' }}>
+        <div
+          className="card animate-fade-in"
+          style={{
+            padding: '40px 24px',
+            textAlign: 'center',
+            flex: 1,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            gap: '16px',
+          }}
+        >
           <div style={{ fontSize: '3rem' }}>🔄</div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Next Round</h2>
           <p style={{ color: 'var(--text-secondary)' }}>New roles are being assigned...</p>
