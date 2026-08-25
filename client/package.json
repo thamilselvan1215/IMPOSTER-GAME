@@ -25,6 +25,7 @@
     "@types/youtube": "^0.3.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
+    "playwright": "^1.62.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

@@ -7,11 +7,26 @@ const ROOM_KEY = 'fti_room_code';
 const NAME_KEY = 'fti_player_name';
 const HOST_KEY = 'fti_is_host';
 
+function generateUUID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // Fallback if crypto.randomUUID fails in insecure context
+    }
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export function getOrCreateSessionId(): string {
   if (typeof window === 'undefined') return '';
   let id = localStorage.getItem(SESSION_KEY);
   if (!id) {
-    id = crypto.randomUUID();
+    id = generateUUID();
     localStorage.setItem(SESSION_KEY, id);
   }
   return id;
