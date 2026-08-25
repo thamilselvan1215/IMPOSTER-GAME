@@ -9,8 +9,9 @@ const AMBIGUOUS_CHARS = /[O0I1]/g;
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 const MAX_ROOMS = 100;
-const ROOM_IDLE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-const HOST_DISCONNECT_GRACE_MS = 60 * 1000; // 60 seconds
+const ROOM_IDLE_TTL_MS = 10 * 60 * 1000;  // 10 minutes idle TTL
+const HOST_DISCONNECT_GRACE_MS = 5 * 60 * 1000; // 5 min grace period for host reconnect
+
 
 function generateRoomCode(): string {
   let code = '';

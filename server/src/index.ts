@@ -33,9 +33,15 @@ const io = new Server(httpServer, {
     origin: '*',
     methods: ['GET', 'POST'],
   },
-  pingTimeout: 60000,
-  pingInterval: 25000,
+  pingTimeout: 120000,       // 2 min: time to wait for pong before disconnecting
+  pingInterval: 30000,       // 30s: how often to ping clients
+  connectTimeout: 30000,     // 30s: max time to complete handshake
+  maxHttpBufferSize: 1e6,    // 1MB max message size
+  transports: ['polling', 'websocket'],
+  allowUpgrades: true,
+  upgradeTimeout: 10000,
 });
+
 
 registerSocketHandlers(io);
 startRoomCleanup();

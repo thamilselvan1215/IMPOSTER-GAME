@@ -39,10 +39,26 @@ export function getSocket(): Socket {
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 10000,
+      reconnectionDelayMax: 8000,
+      timeout: 20000,
+      // Start with polling only for maximum mobile compatibility.
+      // Socket.IO will upgrade to WebSocket automatically when stable.
       transports: ['polling', 'websocket'],
     });
+
+    // When phone screen locks or app goes to background, browsers may
+    // throttle/kill the WebSocket. Re-connect when page becomes visible again.
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+          const s = socket;
+          if (s && !s.connected) {
+            console.log('[Socket] Page visible again — reconnecting...');
+            s.connect();
+          }
+        }
+      });
+    }
   }
   return socket;
 }
@@ -58,3 +74,4 @@ export function disconnectSocket(): void {
     socket.disconnect();
   }
 }
+
