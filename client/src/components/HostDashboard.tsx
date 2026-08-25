@@ -21,6 +21,7 @@ export default function HostDashboard() {
   const [nameEntered, setNameEntered] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [joinUrl, setJoinUrl] = useState('');
+  const [gameMode, setGameMode] = useState<'offline' | 'online'>('offline');
   const [imposterRevealed, setImposterRevealed] = useState<string[] | null>(null);
   const [copied, setCopied] = useState(false);
   // Playback position tracking (for seek slider)
@@ -37,25 +38,33 @@ export default function HostDashboard() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // Build join URL for phones (replaces localhost with LAN IP if available)
+  // Build join URL based on game mode
   useEffect(() => {
-    let hostname = window.location.hostname;
-    const port = window.location.port ? `:${window.location.port}` : '';
-    const protocol = window.location.protocol;
+    if (gameMode === 'online') {
+      // Online mode: players use Vercel public URL
+      const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_URL
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/join`
+        : `${window.location.protocol}//${window.location.host}/join`;
+      setJoinUrl(vercelUrl);
+    } else {
+      // Offline mode: players connect via host's LAN IP
+      let hostname = window.location.hostname;
+      const port = window.location.port ? `:${window.location.port}` : '';
+      const protocol = window.location.protocol;
 
-    if ((hostname === 'localhost' || hostname === '127.0.0.1') && process.env.NEXT_PUBLIC_SERVER_URL) {
-      try {
-        const serverUrl = new URL(process.env.NEXT_PUBLIC_SERVER_URL);
-        if (serverUrl.hostname && serverUrl.hostname !== 'localhost' && serverUrl.hostname !== '127.0.0.1') {
-          hostname = serverUrl.hostname;
+      if ((hostname === 'localhost' || hostname === '127.0.0.1') && process.env.NEXT_PUBLIC_SERVER_URL) {
+        try {
+          const serverUrl = new URL(process.env.NEXT_PUBLIC_SERVER_URL);
+          if (serverUrl.hostname && serverUrl.hostname !== 'localhost' && serverUrl.hostname !== '127.0.0.1') {
+            hostname = serverUrl.hostname;
+          }
+        } catch {
+          // Fallback to window.location.hostname
         }
-      } catch {
-        // Fallback to window.location.hostname
       }
+      setJoinUrl(`${protocol}//${hostname}${port}/join`);
     }
-
-    setJoinUrl(`${protocol}//${hostname}${port}/join`);
-  }, []);
+  }, [gameMode]);
 
   // Socket event listeners
   useEffect(() => {
@@ -327,7 +336,7 @@ export default function HostDashboard() {
   const allReady = players.filter((p) => p.isConnected).every((p) => p.isReady) && players.length > 0;
   const hasRoles = players.some((p) => p.role);
 
-  // ── Pre-room: enter host name ──────────────────────────────────────────────
+  // ── Pre-room: mode selection + enter host name ─────────────────────────────
   if (!nameEntered || !roomCode) {
     return (
       <div className="page-container" style={{ justifyContent: 'center' }}>
@@ -336,6 +345,78 @@ export default function HostDashboard() {
             <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎮</div>
             <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Game Master</h1>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>You control the game</p>
+          </div>
+
+          {/* ── Mode Selector ── */}
+          <div style={{ marginBottom: '24px' }}>
+            <div style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--text-muted)', marginBottom: '10px', textAlign: 'center' }}>SELECT MODE</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+              {/* Offline Mode Card */}
+              <button
+                onClick={() => setGameMode('offline')}
+                style={{
+                  padding: '18px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: `2px solid ${gameMode === 'offline' ? 'var(--crew-primary)' : 'var(--border-subtle)'}`,
+                  background: gameMode === 'offline' ? 'rgba(124,58,237,0.12)' : 'var(--card-bg)',
+                  boxShadow: gameMode === 'offline' ? '0 0 20px var(--crew-glow)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '2rem' }}>📶</div>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'offline' ? 'var(--crew-light)' : 'var(--text-primary)' }}>Offline</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>All phones on host's Wi-Fi / Hotspot</div>
+                {gameMode === 'offline' && <div style={{ fontSize: '0.7rem', color: 'var(--crew-light)', fontWeight: 600 }}>✓ Selected</div>}
+              </button>
+
+              {/* Online Mode Card */}
+              <button
+                onClick={() => setGameMode('online')}
+                style={{
+                  padding: '18px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: `2px solid ${gameMode === 'online' ? '#3b82f6' : 'var(--border-subtle)'}`,
+                  background: gameMode === 'online' ? 'rgba(59,130,246,0.12)' : 'var(--card-bg)',
+                  boxShadow: gameMode === 'online' ? '0 0 20px rgba(59,130,246,0.3)' : 'none',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textAlign: 'center',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <div style={{ fontSize: '2rem' }}>🌐</div>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'online' ? '#93c5fd' : 'var(--text-primary)' }}>Online</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>Players use their own 4G/5G internet</div>
+                {gameMode === 'online' && <div style={{ fontSize: '0.7rem', color: '#93c5fd', fontWeight: 600 }}>✓ Selected</div>}
+              </button>
+            </div>
+
+            {/* Mode Info Banner */}
+            <div style={{
+              marginTop: '10px',
+              padding: '10px 14px',
+              background: gameMode === 'offline' ? 'rgba(124,58,237,0.08)' : 'rgba(59,130,246,0.08)',
+              borderRadius: 'var(--radius-sm)',
+              border: `1px solid ${gameMode === 'offline' ? 'rgba(124,58,237,0.25)' : 'rgba(59,130,246,0.25)'}`,
+              fontSize: '0.78rem',
+              color: 'var(--text-muted)',
+              lineHeight: 1.5,
+            }}>
+              {gameMode === 'offline' ? (
+                <>📶 <strong style={{ color: 'var(--text-secondary)' }}>Offline mode:</strong> All players must connect to your Wi-Fi or mobile hotspot. Share the LAN link shown after creating the room.</>
+              ) : (
+                <>🌐 <strong style={{ color: 'var(--text-secondary)' }}>Online mode:</strong> Players join from anywhere using the Vercel link. Each player can use their own mobile data or any Wi-Fi.</>
+              )}
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -373,7 +454,7 @@ export default function HostDashboard() {
                   <span>Creating Room...</span>
                 </>
               ) : (
-                '🚀 Create Room'
+                `🚀 Create Room (${gameMode === 'offline' ? '📶 Offline' : '🌐 Online'})`
               )}
             </button>
 
