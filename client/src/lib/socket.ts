@@ -6,15 +6,27 @@ import { io, Socket } from 'socket.io-client';
 
 function getServerUrl(): string {
   if (typeof window !== 'undefined') {
-    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
-    const hostname = window.location.hostname;
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
 
-    // Dynamically match the exact host the browser is visiting on port 3001.
-    // localhost:3000 -> connects to localhost:3001
-    // 172.20.10.8:3000 -> connects to 172.20.10.8:3001
-    return `${protocol}//${hostname}:3001`;
+    // If running locally or on local LAN IP (e.g. 192.168.x.x, 172.x.x.x, localhost)
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      /^192\.168\./.test(host) ||
+      /^172\./.test(host) ||
+      /^10\./.test(host)
+    ) {
+      return `${protocol}//${host}:3001`;
+    }
+
+    // Cloud deployment (Vercel): use NEXT_PUBLIC_SERVER_URL or fall back to live Render backend
+    const envUrl = process.env.NEXT_PUBLIC_SERVER_URL;
+    if (envUrl) return envUrl;
+
+    return 'https://imposter-game-servers.onrender.com';
   }
-  return 'http://localhost:3001';
+  return process.env.NEXT_PUBLIC_SERVER_URL || 'https://imposter-game-servers.onrender.com';
 }
 
 let socket: Socket | null = null;
