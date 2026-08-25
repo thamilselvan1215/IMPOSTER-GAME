@@ -6,20 +6,15 @@ import { io, Socket } from 'socket.io-client';
 
 function getServerUrl(): string {
   if (typeof window !== 'undefined') {
-    // If on a device connecting via LAN IP (e.g. 192.168.x.x), dynamically use that IP on port 3001
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
+    const protocol = window.location.protocol === 'https:' ? 'https:' : 'http:';
+    const hostname = window.location.hostname;
 
-    if (host !== 'localhost' && host !== '127.0.0.1') {
-      return `${protocol}//${host}:3001`;
-    }
-
-    const envUrl = process.env.NEXT_PUBLIC_SERVER_URL;
-    if (envUrl) return envUrl;
-
-    return `${protocol}//${host}:3001`;
+    // Dynamically match the exact host the browser is visiting on port 3001.
+    // localhost:3000 -> connects to localhost:3001
+    // 172.20.10.8:3000 -> connects to 172.20.10.8:3001
+    return `${protocol}//${hostname}:3001`;
   }
-  return process.env.NEXT_PUBLIC_SERVER_URL || 'http://localhost:3001';
+  return 'http://localhost:3001';
 }
 
 let socket: Socket | null = null;
