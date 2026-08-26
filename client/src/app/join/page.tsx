@@ -11,13 +11,26 @@ function JoinForm() {
   const [playerName, setPlayerName] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [qrScanned, setQrScanned] = useState(false);
 
-  // Auto-fill room code from URL params if present (e.g. from QR code scan ?code=XXXXXX or ?room=XXXXXX)
+  // Auto-fill room code from URL params if present (from QR code scan ?code=XXXXXX or ?room=XXXXXX)
   useEffect(() => {
     const codeParam = searchParams.get('code') || searchParams.get('room');
+    const savedName = localStorage.getItem('fti_player_name') || '';
+    if (savedName) setPlayerName(savedName);
+
     if (codeParam) {
       const clean = codeParam.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6);
       setRoomCode(clean);
+      setQrScanned(true);
+
+      // If both room code (from QR) and player name (from local storage) exist, auto-join immediately!
+      if (clean.length === 6 && savedName.trim()) {
+        const timer = setTimeout(() => {
+          performJoin(clean, savedName.trim());
+        }, 300);
+        return () => clearTimeout(timer);
+      }
     }
   }, [searchParams]);
 
@@ -26,11 +39,8 @@ function JoinForm() {
     connectSocket();
   }, []);
 
-  const handleJoin = () => {
+  const performJoin = (code: string, name: string) => {
     if (loading) return;
-
-    const code = roomCode.trim().toUpperCase();
-    const name = playerName.trim();
 
     if (!code) {
       setError('Please enter the 6-character room code.');
@@ -108,6 +118,10 @@ function JoinForm() {
     }
   };
 
+  const handleJoin = () => {
+    performJoin(roomCode.trim().toUpperCase(), playerName.trim());
+  };
+
   return (
     <div className="page-container" style={{ paddingTop: '40px', gap: '0' }}>
       <div className="animate-fade-in" style={{ width: '100%' }}>
@@ -128,13 +142,32 @@ function JoinForm() {
         </Link>
 
         {/* Header */}
-        <div style={{ marginBottom: '36px' }}>
+        <div style={{ marginBottom: '24px' }}>
           <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>📱</div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '6px' }}>Join Game</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
             Enter the room code from the Game Master
           </p>
         </div>
+
+        {/* QR Scan Banner */}
+        {qrScanned && (
+          <div
+            style={{
+              padding: '12px 14px',
+              background: 'rgba(16,185,129,0.15)',
+              border: '1px solid rgba(16,185,129,0.4)',
+              borderRadius: 'var(--radius-md)',
+              color: '#10b981',
+              fontSize: '0.85rem',
+              textAlign: 'center',
+              marginBottom: '20px',
+              fontWeight: 600,
+            }}
+          >
+            📷 Scanned QR Code — Room <strong style={{ color: '#fff' }}>{roomCode}</strong> Auto-Filled!
+          </div>
+        )}
 
         {/* Form Container */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

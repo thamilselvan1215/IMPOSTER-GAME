@@ -38,13 +38,14 @@ export default function HostDashboard() {
     setTimeout(() => setToast(null), 3500);
   }, []);
 
-  // Build join URL based on game mode
+  // Build join URL based on game mode and room code (includes ?code=XXXXXX for instant QR scanning join)
   useEffect(() => {
+    const codeQuery = roomCode ? `?code=${roomCode}` : '';
     if (gameMode === 'online') {
       // Online mode: players use Vercel public URL
       const vercelUrl = process.env.NEXT_PUBLIC_VERCEL_URL
-        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/join`
-        : `${window.location.protocol}//${window.location.host}/join`;
+        ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}/join${codeQuery}`
+        : `${window.location.protocol}//${window.location.host}/join${codeQuery}`;
       setJoinUrl(vercelUrl);
     } else {
       // Offline mode: players connect via host's LAN IP
@@ -62,9 +63,9 @@ export default function HostDashboard() {
           // Fallback to window.location.hostname
         }
       }
-      setJoinUrl(`${protocol}//${hostname}${port}/join`);
+      setJoinUrl(`${protocol}//${hostname}${port}/join${codeQuery}`);
     }
-  }, [gameMode]);
+  }, [gameMode, roomCode]);
 
   // Socket event listeners
   useEffect(() => {
