@@ -430,7 +430,9 @@ export function registerSocketHandlers(io: Server) {
         if (!room) return callback?.({ success: false, error: 'ROOM_NOT_FOUND' });
 
         try {
-          const cmd = buildPlayCommand(room, data.role, data.startPosition || 0);
+          const playback = data.role === 'CREW' ? room.crewPlayback : room.imposterPlayback;
+          const startPos = data.startPosition ?? (playback.pausePosition || 0);
+          const cmd = buildPlayCommand(room, data.role, startPos);
           [...room.players.values()]
             .filter((p) => p.role === data.role && p.isConnected)
             .forEach((p) => {
