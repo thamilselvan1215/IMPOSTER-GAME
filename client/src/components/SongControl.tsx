@@ -110,11 +110,12 @@ export default function SongControl({
   };
 
   const displayPos = isDragging ? dragValue : localPos;
-  const sliderMax = duration > 0 ? duration : 100;
-  const sliderPercent = sliderMax > 0 ? (displayPos / sliderMax) * 100 : 0;
+  const sliderMax = duration > 0 ? duration : Math.max(displayPos, 100);
+  const rawPercent = sliderMax > 0 ? (displayPos / sliderMax) * 100 : 0;
+  const sliderPercent = Math.min(100, Math.max(0, rawPercent));
 
   return (
-    <div className={cardClass} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+    <div className={cardClass} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px', overflow: 'hidden' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <span style={{ fontSize: '1.5rem' }}>{isCrew ? '👥' : '🕵️'}</span>
@@ -148,21 +149,34 @@ export default function SongControl({
 
       {/* ── Seek Timeline ── */}
       {videoId && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
           {/* Slider track */}
-          <div style={{ position: 'relative', height: '20px', display: 'flex', alignItems: 'center' }}>
+          <div style={{
+            position: 'relative',
+            height: '20px',
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            boxSizing: 'border-box',
+            overflow: 'hidden',
+            padding: '0 6px',
+          }}>
+            {/* Track background */}
+            <div style={{
+              position: 'absolute', left: '6px', right: '6px', top: '50%', transform: 'translateY(-50%)',
+              height: '4px',
+              background: 'rgba(255,255,255,0.08)', borderRadius: '2px',
+              pointerEvents: 'none',
+            }} />
             {/* Filled track */}
             <div style={{
-              position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-              height: '4px', width: '100%',
-              background: 'rgba(255,255,255,0.08)', borderRadius: '2px',
-            }} />
-            <div style={{
-              position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)',
-              height: '4px', width: `${sliderPercent}%`,
+              position: 'absolute', left: '6px', top: '50%', transform: 'translateY(-50%)',
+              height: '4px', width: `calc(${sliderPercent}% - 12px * (${sliderPercent} / 100))`,
               background: `linear-gradient(90deg, ${color}, ${colorLight})`,
               borderRadius: '2px',
               transition: isDragging ? 'none' : 'width 0.1s linear',
+              maxWidth: 'calc(100% - 12px)',
+              pointerEvents: 'none',
             }} />
             {/* Native range input (transparent, sits on top) */}
             <input
@@ -180,12 +194,13 @@ export default function SongControl({
               style={{
                 position: 'absolute', inset: 0, width: '100%', height: '100%',
                 opacity: 0, cursor: videoId ? 'pointer' : 'default',
-                zIndex: 2,
+                zIndex: 2, margin: 0, padding: 0,
+                boxSizing: 'border-box',
               }}
             />
             {/* Thumb dot */}
             <div style={{
-              position: 'absolute', top: '50%', left: `${sliderPercent}%`,
+              position: 'absolute', top: '50%', left: `calc(6px + (${sliderPercent}% * 0.94))`,
               transform: 'translate(-50%, -50%)',
               width: isDragging ? '16px' : '12px',
               height: isDragging ? '16px' : '12px',
@@ -202,7 +217,7 @@ export default function SongControl({
             <span style={{ color: isDragging ? colorLight : 'var(--text-muted)', fontWeight: isDragging ? 700 : 400 }}>
               {formatTime(displayPos)}
             </span>
-            <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
+            <span>{duration > 0 ? formatTime(duration) : formatTime(sliderMax)}</span>
           </div>
         </div>
       )}
