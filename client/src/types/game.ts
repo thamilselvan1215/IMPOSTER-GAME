@@ -21,6 +21,12 @@ export interface PublicPlayer {
   isReady: boolean;
   isConnected: boolean;
   role?: PlayerRole; // only populated on host view
+  bluetoothConnected?: boolean;
+  audioStatus?: 'ready' | 'downloading' | 'failed' | 'idle';
+  wifiStatus?: 'connected' | 'disconnected';
+  batteryLevel?: number;
+  currentPosition?: number;
+  isPlaying?: boolean;
 }
 
 export interface RoomState {
@@ -31,6 +37,7 @@ export interface RoomState {
   players: PublicPlayer[];
   connected: number;
   total: number;
+  maxPlayers: number;
   crewSongLoaded: boolean;
   imposterSongLoaded: boolean;
   crewVideoId?: string;

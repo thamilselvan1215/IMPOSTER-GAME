@@ -352,7 +352,10 @@ export default function HostDashboard() {
   const players = roomState?.players || [];
   const connectedCount = roomState?.connected || 0;
   const totalCount = roomState?.total || 0;
-  const allReady = players.filter((p) => p.isConnected).every((p) => p.isReady) && players.length > 0;
+  const maxPlayers = roomState?.maxPlayers || 15;
+  const btConnectedCount = players.filter((p) => p.isConnected && (p.bluetoothConnected ?? true)).length;
+  const audioReadyCount = players.filter((p) => p.isConnected && (p.audioStatus === 'ready' || p.isReady)).length;
+  const allReady = players.filter((p) => p.isConnected).every((p) => p.isReady || p.audioStatus === 'ready') && players.length > 0;
   const hasRoles = players.some((p) => p.role);
 
   // ── Pre-room: mode selection + enter host name ─────────────────────────────
@@ -363,7 +366,7 @@ export default function HostDashboard() {
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎮</div>
             <h1 style={{ fontSize: '1.8rem', marginBottom: '8px' }}>Game Master</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>You control the game</p>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>You control the multi-device Wi-Fi audio session</p>
           </div>
 
           {/* ── Mode Selector ── */}
@@ -389,8 +392,8 @@ export default function HostDashboard() {
                 }}
               >
                 <div style={{ fontSize: '2rem' }}>📶</div>
-                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'offline' ? 'var(--crew-light)' : 'var(--text-primary)' }}>Offline</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>All phones on host's Wi-Fi / Hotspot</div>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'offline' ? 'var(--crew-light)' : 'var(--text-primary)' }}>Offline Wi-Fi</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>10-15 Players on Local Wi-Fi / Hotspot (No Internet)</div>
                 {gameMode === 'offline' && <div style={{ fontSize: '0.7rem', color: 'var(--crew-light)', fontWeight: 600 }}>✓ Selected</div>}
               </button>
 
@@ -413,8 +416,8 @@ export default function HostDashboard() {
                 }}
               >
                 <div style={{ fontSize: '2rem' }}>🌐</div>
-                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'online' ? '#93c5fd' : 'var(--text-primary)' }}>Online</div>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>Players use their own 4G/5G internet</div>
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: gameMode === 'online' ? '#93c5fd' : 'var(--text-primary)' }}>Online Cloud</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>Players use their own mobile 4G/5G data</div>
                 {gameMode === 'online' && <div style={{ fontSize: '0.7rem', color: '#93c5fd', fontWeight: 600 }}>✓ Selected</div>}
               </button>
             </div>
@@ -431,7 +434,7 @@ export default function HostDashboard() {
               lineHeight: 1.5,
             }}>
               {gameMode === 'offline' ? (
-                <>📶 <strong style={{ color: 'var(--text-secondary)' }}>Offline mode:</strong> All players must connect to your Wi-Fi or mobile hotspot. Share the LAN link shown after creating the room.</>
+                <>📶 <strong style={{ color: 'var(--text-secondary)' }}>Local Wi-Fi mode:</strong> Support 10–15 player devices on local router or mobile hotspot. Each player connects to their own Bluetooth headphones.</>
               ) : (
                 <>🌐 <strong style={{ color: 'var(--text-secondary)' }}>Online mode:</strong> Players join from anywhere using the Vercel link. Each player can use their own mobile data or any Wi-Fi.</>
               )}
@@ -473,7 +476,7 @@ export default function HostDashboard() {
                   <span>Creating Room...</span>
                 </>
               ) : (
-                `🚀 Create Room (${gameMode === 'offline' ? '📶 Offline' : '🌐 Online'})`
+                `🚀 Create Room (${gameMode === 'offline' ? '📶 Local Wi-Fi' : '🌐 Online'})`
               )}
             </button>
 
@@ -494,35 +497,41 @@ export default function HostDashboard() {
     <div className="page-container-wide" style={{ gap: '20px', paddingBottom: '40px' }}>
       {/* ── Top Bar ── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <span className="logo-text">🎵 Find the Imposter</span>
+        <span className="logo-text">🎵 Find the Imposter — Wi-Fi Audio Controller</span>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className={`status-dot ${connected ? 'status-dot-green' : 'status-dot-red'}`} />
           <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-            {connected ? 'Live' : 'Offline'}
+            {connected ? (gameMode === 'offline' ? '📶 Local Wi-Fi Active' : '🌐 Online') : 'Offline'}
           </span>
         </div>
         <button className="btn btn-ghost btn-sm" onClick={endGame} style={{ color: 'var(--imposter-light)' }}>
-          End Game
+          End Session
         </button>
       </div>
 
-      {/* ── Room Code Banner ── */}
+      {/* ── Room Code & Multi-Device Summary Banner ── */}
       <div
         className="card"
         style={{ padding: '20px', display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}
       >
-        <div style={{ flex: 1 }}>
+        <div style={{ flex: 1, minWidth: '220px' }}>
           <div className="section-label" style={{ marginBottom: '6px' }}>
             Room Code
           </div>
           <div className="room-code">{roomCode}</div>
-          <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '4px' }}>
-            {connectedCount}/{totalCount} connected
-            {connectedCount === totalCount && totalCount > 0 && (
-              <span style={{ color: 'var(--accent-green)', marginLeft: '8px' }}>● All connected</span>
-            )}
+          <div style={{ display: 'flex', gap: '16px', alignItems: 'center', marginTop: '8px', flexWrap: 'wrap', fontSize: '0.85rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              👥 Players: <strong style={{ color: 'var(--crew-light)' }}>{totalCount} / {maxPlayers}</strong>
+            </span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              🎧 Headphones: <strong style={{ color: '#10b981' }}>{btConnectedCount} / {connectedCount}</strong>
+            </span>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              🎵 Audio Ready: <strong style={{ color: '#10b981' }}>{audioReadyCount} / {connectedCount}</strong>
+            </span>
           </div>
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
           <button className="btn btn-ghost btn-sm" onClick={copyRoomCode}>
             {copied ? '✓ Copied!' : '📋 Copy Code'}

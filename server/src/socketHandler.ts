@@ -61,6 +61,12 @@ function buildPublicRoomState(room: Room) {
     name: p.name,
     isReady: p.isReady,
     isConnected: p.isConnected,
+    bluetoothConnected: p.bluetoothConnected ?? true,
+    audioStatus: p.audioStatus || (p.isReady ? 'ready' : 'idle'),
+    wifiStatus: p.isConnected ? 'connected' : 'disconnected',
+    batteryLevel: p.batteryLevel,
+    currentPosition: p.currentPosition,
+    isPlaying: p.isPlaying,
   }));
   return {
     code: room.code,
@@ -70,6 +76,7 @@ function buildPublicRoomState(room: Room) {
     players,
     connected: connectedCount(room),
     total: room.players.size,
+    maxPlayers: room.maxPlayers || 15,
     crewSongLoaded: !!room.crewSong,
     imposterSongLoaded: !!room.imposterSong,
     crewVideoId: room.crewSong?.videoId,
@@ -85,6 +92,12 @@ function buildHostRoomState(room: Room) {
     isReady: p.isReady,
     isConnected: p.isConnected,
     role: p.role,
+    bluetoothConnected: p.bluetoothConnected ?? true,
+    audioStatus: p.audioStatus || (p.isReady ? 'ready' : 'idle'),
+    wifiStatus: p.isConnected ? 'connected' : 'disconnected',
+    batteryLevel: p.batteryLevel,
+    currentPosition: p.currentPosition,
+    isPlaying: p.isPlaying,
   }));
   return { ...base, players: playersWithRoles };
 }
@@ -708,6 +721,51 @@ export function registerSocketHandlers(io: Server) {
           if (updated) {
             io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
           }
+        }
+      }
+    );
+
+    // ── PLAYER STATUS REPORT (Bluetooth, Audio, Battery, Position) ────────────
+    socket.on(
+      'player_status',
+      async (data: {
+        roomCode: string;
+        sessionId: string;
+        bluetoothConnected?: boolean;
+        audioStatus?: 'ready' | 'downloading' | 'failed' | 'idle';
+        batteryLevel?: number;
+        currentPosition?: number;
+        isPlaying?: boolean;
+      }) => {
+        const code = (data.roomCode || '').trim().toUpperCase();
+        const room = await getRoom(code);
+        if (!room) return;
+        const player = room.players.get(data.sessionId);
+        if (player) {
+          player.isConnected = true;
+          if (data.bluetoothConnected !== undefined) player.bluetoothConnected = data.bluetoothConnected;
+          if (data.audioStatus !== undefined) player.audioStatus = data.audioStatus;
+          if (data.batteryLevel !== undefined) player.batteryLevel = data.batteryLevel;
+          if (data.currentPosition !== undefined) player.currentPosition = data.currentPosition;
+          if (data.isPlaying !== undefined) player.isPlaying = data.isPlaying;
+
+          io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
+        }
+      }
+    );
+
+    // ── SONG READY CONFIRMATION ──────────────────────────────────────────────
+    socket.on(
+      'song_ready',
+      async (data: { roomCode: string; sessionId: string }) => {
+        const code = (data.roomCode || '').trim().toUpperCase();
+        const room = await getRoom(code);
+        if (!room) return;
+        const player = room.players.get(data.sessionId);
+        if (player) {
+          player.audioStatus = 'ready';
+          player.isReady = true;
+          io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
         }
       }
     );

@@ -22,11 +22,19 @@ export interface Player {
   role?: PlayerRole;
   isReady: boolean;
   isConnected: boolean;
+  bluetoothConnected?: boolean;
+  audioStatus?: 'ready' | 'downloading' | 'failed' | 'idle';
+  wifiStatus?: 'connected' | 'disconnected';
+  batteryLevel?: number;
+  currentPosition?: number;
+  isPlaying?: boolean;
   joinedAt: number;
 }
 
 export interface SongConfig {
   videoId: string;
+  songId?: string;
+  hash?: string;
   loadedAt: number;
 }
 

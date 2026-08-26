@@ -98,17 +98,64 @@ export default function PlayerDashboard() {
     };
   }, [searchParams, router]);
 
-  // Heartbeat to maintain active online status on server
+  // Bluetooth headphones, Battery level, and Audio status tracking
+  const [bluetoothConnected, setBluetoothConnected] = useState<boolean>(true);
+  const [batteryLevel, setBatteryLevel] = useState<number | undefined>(undefined);
+  const [audioStatus, setAudioStatus] = useState<'ready' | 'downloading' | 'failed' | 'idle'>('idle');
+
+  useEffect(() => {
+    // 1. Detect audio output devices (Bluetooth headphones / headsets)
+    const checkAudioDevices = async () => {
+      if (typeof navigator !== 'undefined' && navigator.mediaDevices?.enumerateDevices) {
+        try {
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          const audioOutputs = devices.filter((d) => d.kind === 'audiooutput');
+          // If audio outputs exist or bluetooth is available
+          setBluetoothConnected(audioOutputs.length > 0);
+        } catch {
+          setBluetoothConnected(true);
+        }
+      }
+    };
+
+    checkAudioDevices();
+
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+      navigator.mediaDevices.ondevicechange = checkAudioDevices;
+    }
+
+    // 2. Battery level if supported
+    if (typeof navigator !== 'undefined' && (navigator as any).getBattery) {
+      (navigator as any).getBattery().then((battery: any) => {
+        setBatteryLevel(Math.round(battery.level * 100));
+        battery.onlevelchange = () => {
+          setBatteryLevel(Math.round(battery.level * 100));
+        };
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Heartbeat & status reporting to maintain active online status and report Bluetooth/Audio status
   useEffect(() => {
     if (!roomCode) return;
     const socket = socketRef.current;
     const interval = setInterval(() => {
       if (socket.connected) {
+        const currentTime = ytRef.current?.getCurrentTime() || 0;
         socket.emit('player_heartbeat', { roomCode, sessionId: sessionId.current });
+        socket.emit('player_status', {
+          roomCode,
+          sessionId: sessionId.current,
+          bluetoothConnected,
+          audioStatus,
+          batteryLevel,
+          currentPosition: currentTime,
+          isPlaying,
+        });
       }
     }, 4000);
     return () => clearInterval(interval);
-  }, [roomCode]);
+  }, [roomCode, bluetoothConnected, audioStatus, batteryLevel, isPlaying]);
 
   // Socket events
   useEffect(() => {
@@ -291,7 +338,9 @@ export default function PlayerDashboard() {
         ytRef.current?.pause();
       }, 150);
     }
+    setAudioStatus('ready');
     socketRef.current.emit('player_ready', { roomCode });
+    socketRef.current.emit('song_ready', { roomCode, sessionId: sessionId.current });
     setPlayerReady(true);
   };
 
