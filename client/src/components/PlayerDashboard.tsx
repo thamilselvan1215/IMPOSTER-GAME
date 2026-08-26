@@ -209,6 +209,8 @@ export default function PlayerDashboard() {
     };
 
     const onPlayCommand = (data: PlayCommand) => {
+      setGameState('PLAYING');
+      setIsPlaying(true);
       if (data.videoId) {
         setCurrentVideoId(data.videoId);
         ytRef.current?.loadVideo(data.videoId);
@@ -220,6 +222,7 @@ export default function PlayerDashboard() {
       if (playTimerRef.current) clearTimeout(playTimerRef.current);
       ytRef.current?.pause();
       setIsPlaying(false);
+      setGameState('PAUSED');
     };
 
     const onStopCommand = () => {

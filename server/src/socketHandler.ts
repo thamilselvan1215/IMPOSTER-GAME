@@ -437,10 +437,9 @@ export function registerSocketHandlers(io: Server) {
               io.to(p.socketId).emit('play_command', cmd);
             });
 
-          if (room.state === 'READY_CHECK' || room.state === 'NEXT_ROUND') {
-            room.state = 'PLAYING';
-            io.to(`room:${room.code}`).emit('game_state_update', { state: 'PLAYING' });
-          }
+          room.state = 'PLAYING';
+          io.to(`room:${room.code}`).emit('game_state_update', { state: 'PLAYING' });
+          io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
 
           startSyncInterval(io, room.code);
           callback?.({ success: true });
@@ -533,6 +532,7 @@ export function registerSocketHandlers(io: Server) {
 
         room.state = 'PAUSED';
         io.to(`room:${room.code}`).emit('game_state_update', { state: 'PAUSED' });
+        io.to(`room:${room.code}:host`).emit('room_state', buildHostRoomState(room));
         callback?.({ success: true });
       }
     );
